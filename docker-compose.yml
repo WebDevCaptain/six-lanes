@@ -1,0 +1,90 @@
+name: olap-postgres
+
+# Every container this project needs. Nothing is started by an ad-hoc `docker run`.
+#
+#   pnpm up            -> pg + lake-http          (Days 1-6)
+#   pnpm up:pgduckdb   -> the above + pgduckdb    (Day 7, pulls a ~1 GB image)
+#   pnpm down          -> stop everything, keep the volumes
+#   pnpm reset         -> stop everything, DROP the volumes, start clean
+
+services:
+  # Lane A baseline and, from Day 3, the DuckLake catalog.
+  # Port 55432 avoids colliding with a Postgres already listening on 5432.
+  pg:
+    image: postgres:18
+    container_name: olap-pg
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: olap
+    ports:
+      - "55432:5432"
+    command:
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_parallel_workers_per_gather=2
+      # EXPLAIN (ANALYZE, BUFFERS) is how lane A reports bytes read (plan section 9.4).
+      - -c
+      - track_io_timing=on
+    volumes:
+      - pg-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d olap"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Serves the DuckLake data files over HTTP so we can prove the lake is portable
+  # (Day 3) and so the browser lanes can range-read it (Day 5).
+  #
+  # nginx is here rather than `python -m http.server` for one reason: Python's
+  # server ignores the Range header, and DuckDB then falls back to downloading
+  # whole files, which silently invalidates every byte measurement.
+  lake-http:
+    image: nginx:1.29-alpine
+    container_name: olap-lake-http
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/nginx-lake.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./lake:/srv/lake:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost: the image resolves localhost to ::1 first and
+      # nginx only listens on IPv4 here.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Lane F. Needs shared_preload_libraries, which is exactly why it cannot run on
+  # a managed Postgres. Behind a profile so Days 1-6 do not pay for the image pull.
+  pgduckdb:
+    image: pgduckdb/pgduckdb:18-v1.1.1
+    container_name: olap-pgduckdb
+    profiles: ["pgduckdb"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: olap
+    ports:
+      - "55433:5432"
+    command:
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_parallel_workers_per_gather=2
+      - -c
+      - shared_preload_libraries=pg_duckdb
+    volumes:
+      - pgduckdb-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d olap"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pg-data:
+  pgduckdb-data:

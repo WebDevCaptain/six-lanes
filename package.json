@@ -1,0 +1,35 @@
+{
+  "name": "olap-postgres",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "up": "docker compose up -d --wait pg lake-http",
+    "up:pgduckdb": "docker compose --profile pgduckdb up -d --wait",
+    "down": "docker compose down",
+    "reset": "docker compose down -v && docker compose up -d --wait pg lake-http",
+    "generate": "tsx src/generate.ts",
+    "load": "tsx src/load.ts",
+    "compare": "tsx src/compare.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "OLAP_INTEGRATION=1 vitest run tests/integration",
+    "test:all": "OLAP_INTEGRATION=1 vitest run"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.4",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.6",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

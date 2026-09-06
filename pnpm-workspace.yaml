@@ -1,0 +1,5 @@
+# pnpm 11 reads settings from here, not from package.json.
+# esbuild ships a platform binary and needs its install script to run; tsx and
+# vitest are both unusable without it.
+allowBuilds:
+  esbuild: true
