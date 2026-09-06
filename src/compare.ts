@@ -25,7 +25,7 @@ import type { Lane, LaneId, LaneResult } from './types.js';
  * Exits non-zero when any lane disagrees with lane A. That gate is deliberately
  * fatal: a published timing next to a wrong answer is worse than no number at all.
  */
-const LANES_TO_RUN: readonly LaneId[] = ['postgres', 'duckdb-lake'];
+const LANES_TO_RUN: readonly LaneId[] = ['postgres', 'duckdb-postgres', 'duckdb-lake'];
 
 interface ResultRow {
   readonly queryId: QueryId;
@@ -82,6 +82,8 @@ console.log(`\n${DATASET.orderItems.toLocaleString()} line items. ${describeProt
 
 for (const queryId of QUERY_IDS) console.log(`  ${queryId.padEnd(26)}${getQuery(queryId).concept}`);
 
+console.log(`\n${describePushdown()}`);
+
 if (failures.length > 0) {
   console.error(`\n${failures.length} lane(s) disagreed with lane A:\n`);
   for (const failure of failures) console.error(`  ${failure}`);
@@ -100,6 +102,29 @@ async function runAll(lanes: readonly Lane[], queryId: QueryId): Promise<LaneRes
 function describeProtocol(): string {
   const runs = rows[0]?.result.timings.runs ?? 0;
   return `${runs} timed runs per cell after 1 warm-up; median and p95, never a mean.`;
+}
+
+/**
+ * What each lane got its storage layer to do for it.
+ *
+ * This is the whole subject of lane B. Federation's bet is that the remote side
+ * does the filtering; the rows that still crossed the wire say how the bet paid off.
+ */
+function describePushdown(): string {
+  const lines = ['pushdown, per lane:'];
+
+  for (const { queryId, result } of rows) {
+    const { columnsProjected, filtersPushed, rowsScanned, rowsReturned } = result.metrics;
+    if (columnsProjected === undefined) continue;
+
+    lines.push(
+      `  ${LANE_META[result.laneId].letter}  ${queryId}`,
+      `       projects  ${columnsProjected.join(', ')}`,
+      `       filters   ${filtersPushed ?? 'none pushed down'}`,
+      `       rows      ${formatCount(rowsScanned)} scanned to return ${formatCount(rowsReturned)}`,
+    );
+  }
+  return lines.join('\n');
 }
 
 /** Appends the run to the lab notebook. Never rewrites history, only adds to it. */

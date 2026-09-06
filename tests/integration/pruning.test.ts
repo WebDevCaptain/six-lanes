@@ -4,7 +4,7 @@ import type { DuckDBConnection } from '@duckdb/node-api';
 import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../../src/config.js';
 import { connectDuckDB } from '../../src/duckdb/connect.js';
 import { createProfiler, type DuckDBProfiler } from '../../src/duckdb/profile.js';
-import { discoverPartitions, parquetRelation, totalBytes } from '../../src/lake/raw-lake.js';
+import { discoverParquetFiles, parquetRelation, totalBytes } from '../../src/lake/raw-lake.js';
 
 /**
  * The physics claims, measured against the real lake.
@@ -18,7 +18,7 @@ let lakeBytes: number;
 let partitionCount: number;
 
 beforeAll(async () => {
-  const partitions = discoverPartitions(PATHS.lakeRoot, LAKE_DIRS.raw);
+  const partitions = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
   lakeBytes = totalBytes(partitions);
   partitionCount = partitions.length;
 
@@ -37,7 +37,7 @@ describe('column pruning', () => {
       'SELECT category, sum(revenue) FROM lake_orders GROUP BY 1',
       [],
     );
-    expect(summary.columnsRead).toEqual(['category', 'revenue']);
+    expect(summary.columnsProjected).toEqual(['category', 'revenue']);
     expect(summary.bytesRead).toBeLessThan(lakeBytes * 0.35);
   });
 
@@ -48,7 +48,7 @@ describe('column pruning', () => {
       [],
     );
     expect(four.bytesRead).toBeGreaterThan(two.bytesRead);
-    expect(four.columnsRead).toEqual(['category', 'cost', 'quantity', 'revenue']);
+    expect(four.columnsProjected).toEqual(['category', 'cost', 'quantity', 'revenue']);
   });
 });
 
@@ -89,13 +89,13 @@ describe('the lake_orders view', () => {
     const direct = await profiler.measure(
       `SELECT month, sum(revenue) FROM ${parquetRelation(
         LAKE_BASE_URL,
-        discoverPartitions(PATHS.lakeRoot, LAKE_DIRS.raw),
+        discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw),
       )} WHERE month = '2025-03' GROUP BY 1`,
       [],
     );
     expect(throughView.filesRead).toBe(direct.filesRead);
     expect(throughView.bytesRead).toBe(direct.bytesRead);
-    expect(throughView.columnsRead).toEqual(direct.columnsRead);
+    expect(throughView.columnsProjected).toEqual(direct.columnsProjected);
   });
 });
 
@@ -112,7 +112,7 @@ describe('row group statistics', () => {
 
 describe('the lake as served', () => {
   it('answers range requests with 206 and a Content-Range', async () => {
-    const partitions = discoverPartitions(PATHS.lakeRoot, LAKE_DIRS.raw);
+    const partitions = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
     const response = await fetch(`${LAKE_BASE_URL}/${partitions[0]!.path}`, {
       headers: { Range: 'bytes=0-127', Origin: 'https://example.com' },
     });

@@ -1,7 +1,8 @@
 import { LAKE_BASE_URL, LAKE_DIRS, PATHS, POSTGRES_URL } from '../config.js';
-import { discoverPartitions, parquetRelation } from '../lake/raw-lake.js';
+import { discoverParquetFiles, parquetRelation } from '../lake/raw-lake.js';
+import { toLibpqConnectionString } from '../postgres/connection.js';
 import type { Lane, LaneId } from '../types.js';
-import { createDuckDBLakeLane } from './duckdb-lake.js';
+import { createDuckDBLane } from './duckdb.js';
 import { LANE_META } from './meta.js';
 import { createPostgresLane } from './postgres.js';
 
@@ -9,6 +10,10 @@ import { createPostgresLane } from './postgres.js';
  * Construction of the lanes that run on the server. Lanes D and E are browser-only
  * and are built in app/, where a browser exists.
  */
+
+/** The view lane C reads through, so the SQL on screen is not two dozen URLs. */
+const LAKE_VIEW = 'lake_orders';
+
 const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
   postgres: () =>
     createPostgresLane({
@@ -18,11 +23,33 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       handicaps: LANE_META.postgres.handicaps,
     }),
 
+  'duckdb-postgres': () =>
+    createDuckDBLane({
+      id: 'duckdb-postgres',
+      label: LANE_META['duckdb-postgres'].label,
+      handicaps: LANE_META['duckdb-postgres'].handicaps,
+      extensions: ['postgres'],
+      // READ_ONLY makes the intent explicit: this lane is a reader of somebody
+      // else's transactional database and has no business writing to it.
+      setup: [`ATTACH '${toLibpqConnectionString(POSTGRES_URL)}' AS pg (TYPE postgres, READ_ONLY)`],
+      relation: 'pg.orders',
+      partitioned: false,
+      uncachedMetrics: false,
+    }),
+
   'duckdb-lake': () =>
-    createDuckDBLakeLane({
+    createDuckDBLane({
+      id: 'duckdb-lake',
       label: LANE_META['duckdb-lake'].label,
-      relation: parquetRelation(LAKE_BASE_URL, discoverPartitions(PATHS.lakeRoot, LAKE_DIRS.raw)),
+      handicaps: [
+        'Reads the lake over HTTP, the same path a CDN-hosted deployment uses.',
+        'Byte counts come from an uncached pass: no client-side file cache, so every run pays the full transfer.',
+      ],
+      extensions: ['httpfs'],
+      relation: parquetRelation(LAKE_BASE_URL, discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw)),
+      viewName: LAKE_VIEW,
       partitioned: true,
+      uncachedMetrics: true,
     }),
 };
 

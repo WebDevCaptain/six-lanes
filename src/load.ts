@@ -2,9 +2,10 @@ import { existsSync, rmSync } from 'node:fs';
 
 import pg from 'pg';
 
+import { formatBytes } from './bench/table.js';
 import { DATASET, LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
 import { connectDuckDB } from './duckdb/connect.js';
-import { discoverPartitions, totalBytes } from './lake/raw-lake.js';
+import { discoverParquetFiles, totalBytes } from './lake/raw-lake.js';
 import { toLibpqConnectionString } from './postgres/connection.js';
 import { readSqlFile } from './sql-files.js';
 
@@ -35,9 +36,9 @@ const lakeMs = await time(async () => {
   `);
 });
 
-const partitions = discoverPartitions(PATHS.lakeRoot, LAKE_DIRS.raw);
+const partitions = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
 console.log(
-  `  ${partitions.length} partitions, ${mb(totalBytes(partitions))} on disk, ${lakeMs}\n`,
+  `  ${partitions.length} partitions, ${formatBytes(totalBytes(partitions))} on disk, ${lakeMs}\n`,
 );
 
 console.log('loading Postgres...');
@@ -66,7 +67,7 @@ const sizes = await client.query<{ total: string; heap: string }>(`
 `);
 console.log(`  ${sizes.rows[0]!.total} total, ${sizes.rows[0]!.heap} heap\n`);
 
-console.log(`lake  ${mb(totalBytes(partitions))} across ${partitions.length} files`);
+console.log(`lake  ${formatBytes(totalBytes(partitions))} across ${partitions.length} files`);
 console.log(`heap  ${sizes.rows[0]!.heap}`);
 console.log(`ratio ${(bytesOf(sizes.rows[0]!.heap) / totalBytes(partitions)).toFixed(1)}x`);
 console.log(`\nserved at ${DATASET.orderItems.toLocaleString()} rows; run \`pnpm compare\` next`);
@@ -83,10 +84,6 @@ async function time(fn: () => Promise<unknown>): Promise<string> {
   const started = performance.now();
   await fn();
   return `${((performance.now() - started) / 1000).toFixed(2)}s`;
-}
-
-function mb(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(2)} MB`;
 }
 
 /** Parses `pg_size_pretty` output back to bytes, for the one ratio printed above. */

@@ -33,8 +33,23 @@ export interface ProfileSummary {
   readonly rowsScanned: number;
   /** Files the scan actually opened, after partition pruning. */
   readonly filesRead: number;
-  /** Columns the scan actually read, after column pruning. */
-  readonly columnsRead: readonly string[];
+  /**
+   * Columns the scan hands to the operator above it, after column pruning.
+   *
+   * Not quite the same as "columns read": a column used only to evaluate a pushed
+   * filter is read off disk and then dropped, so it never appears here. Q2 on the
+   * lake projects `month` and `revenue` while also reading `order_ts` for the range
+   * predicate, and the byte count reflects all three.
+   */
+  readonly columnsProjected: readonly string[];
+  /**
+   * Predicates the scan pushed into the storage layer, as DuckDB rendered them.
+   *
+   * For lane B this is the whole story: it says exactly which parts of the WHERE
+   * clause Postgres got to evaluate for itself, and by omission which parts were
+   * paid for by dragging rows across the wire.
+   */
+  readonly filtersPushed?: string | undefined;
 }
 
 export interface DuckDBProfiler {
@@ -73,6 +88,7 @@ interface ProfileNode {
   readonly extra_info?: {
     readonly Projections?: readonly string[];
     readonly 'Total Files Read'?: string;
+    readonly Filters?: string;
   };
   readonly children?: readonly ProfileNode[];
 }
@@ -80,13 +96,15 @@ interface ProfileNode {
 function summarize(root: ProfileNode): ProfileSummary {
   let rowsScanned = 0;
   let filesRead = 0;
-  const columnsRead = new Set<string>();
+  const columnsProjected = new Set<string>();
+  const filters: string[] = [];
 
   const walk = (node: ProfileNode): void => {
     if (node.operator_type === 'TABLE_SCAN') {
       rowsScanned += node.operator_cardinality ?? 0;
       filesRead += Number(node.extra_info?.['Total Files Read'] ?? 0);
-      for (const column of node.extra_info?.Projections ?? []) columnsRead.add(column);
+      for (const column of node.extra_info?.Projections ?? []) columnsProjected.add(column);
+      if (node.extra_info?.Filters) filters.push(node.extra_info.Filters);
     }
     for (const child of node.children ?? []) walk(child);
   };
@@ -96,7 +114,8 @@ function summarize(root: ProfileNode): ProfileSummary {
     bytesRead: root.total_bytes_read ?? 0,
     rowsScanned,
     filesRead,
-    columnsRead: [...columnsRead].sort(),
+    columnsProjected: [...columnsProjected].sort(),
+    filtersPushed: filters.length > 0 ? filters.join(' AND ') : undefined,
   };
 }
 

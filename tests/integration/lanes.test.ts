@@ -11,7 +11,7 @@ import type { Lane, LaneId, LaneResult } from '../../src/types.js';
  * Needs the containers up and the data loaded:
  *   pnpm up && pnpm generate && pnpm load && pnpm test:integration
  */
-const LANES: readonly LaneId[] = ['postgres', 'duckdb-lake'];
+const LANES: readonly LaneId[] = ['postgres', 'duckdb-postgres', 'duckdb-lake'];
 
 let lanes: Lane[] = [];
 const results = new Map<string, LaneResult[]>();
@@ -49,7 +49,10 @@ describe.each(QUERY_IDS)('%s', (queryId) => {
       expect(result.timings.runs).toBe(5);
       expect(result.timings.p95Ms).toBeGreaterThanOrEqual(result.timings.warmMs);
       expect(result.metrics.rowsReturned).toBe(result.rows.length);
-      expect(result.metrics.bytesRead).toBeGreaterThan(0);
+      // Lane B reads over the Postgres wire protocol, which DuckDB does not
+      // instrument, so it reports no byte count rather than a made-up one.
+      if (result.laneId === 'duckdb-postgres') expect(result.metrics.bytesRead).toBeUndefined();
+      else expect(result.metrics.bytesRead).toBeGreaterThan(0);
     }
   });
 
@@ -78,7 +81,7 @@ describe('the argument the project is making', () => {
 
   it('Q1: only the two columns the query mentions are read', () => {
     const lake = results.get('revenue_by_category')!.find((r) => r.laneId === 'duckdb-lake')!;
-    expect(lake.metrics.columnsRead).toEqual(['category', 'revenue']);
+    expect(lake.metrics.columnsProjected).toEqual(['category', 'revenue']);
   });
 
   it('Q2: partition pruning opens fewer files than the lake holds', () => {
@@ -103,5 +106,38 @@ describe('the argument the project is making', () => {
     const heap = results.get('order_lookup')!.find((r) => r.laneId === 'postgres')!;
     const lake = results.get('order_lookup')!.find((r) => r.laneId === 'duckdb-lake')!;
     expect(heap.metrics.bytesRead!).toBeLessThan(lake.metrics.bytesRead!);
+  });
+});
+
+describe('lane B: what federation pushes down and what it drags over the wire', () => {
+  const laneB = (queryId: string): LaneResult =>
+    results.get(queryId)!.find((r) => r.laneId === 'duckdb-postgres')!;
+
+  it('pushes the projection down: only the columns the query names cross the wire', () => {
+    expect(laneB('revenue_by_category').metrics.columnsProjected).toEqual(['category', 'revenue']);
+  });
+
+  it('pushes the date range down, so Postgres does the filtering', () => {
+    const metrics = laneB('revenue_by_month_filtered').metrics;
+    expect(metrics.filtersPushed).toContain('order_ts>=');
+    expect(metrics.filtersPushed).toContain('order_ts<');
+  });
+
+  it('pushes the point lookup down, so the b-tree still gets used', () => {
+    expect(laneB('order_lookup').metrics.filtersPushed).toContain('order_id=');
+    expect(laneB('order_lookup').metrics.rowsScanned).toBe(3);
+  });
+
+  it('does NOT push the aggregate down: a million rows cross the wire for eight', () => {
+    const result = laneB('revenue_by_category');
+    expect(result.metrics.filtersPushed).toBeUndefined();
+    expect(result.metrics.rowsScanned).toBe(result.metrics.rowsScanned);
+    expect(result.metrics.rowsScanned).toBeGreaterThan(100 * result.metrics.rowsReturned);
+  });
+
+  it('is beaten by the lake on the query with no predicate to push', () => {
+    const federated = laneB('revenue_by_category').timings.warmMs;
+    const lake = results.get('revenue_by_category')!.find((r) => r.laneId === 'duckdb-lake')!.timings.warmMs;
+    expect(lake).toBeLessThan(federated);
   });
 });

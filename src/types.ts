@@ -27,8 +27,18 @@ export interface QueryMetrics {
   readonly rowsReturned: number;
   /** Files the scan opened after partition pruning. Lake lanes only. */
   readonly filesRead?: number | undefined;
-  /** Columns the scan read after column pruning. Lake lanes only. */
-  readonly columnsRead?: readonly string[] | undefined;
+  /**
+   * Columns the scan produced, after column pruning. A column read only to evaluate
+   * a pushed-down filter is not listed, though its bytes are counted.
+   */
+  readonly columnsProjected?: readonly string[] | undefined;
+  /**
+   * Predicates the engine pushed into the storage layer.
+   *
+   * Lane B's headline metric. Federation's whole bet is that the remote side does
+   * the filtering; what is missing from this string is what crossed the wire.
+   */
+  readonly filtersPushed?: string | undefined;
   /**
    * What the engine says it spent on itself, excluding the client round trip.
    *
