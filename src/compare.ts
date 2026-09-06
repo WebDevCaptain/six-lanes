@@ -54,7 +54,7 @@ const COLUMNS: readonly Column<ResultRow>[] = [
 
 const lanes = await openAvailableLanes(LANES_TO_RUN);
 if (!lanes.some((lane) => lane.id === BASELINE_LANE)) {
-  throw new Error(`baseline lane ${BASELINE_LANE} is unavailable - run \`pnpm up && pnpm load\``);
+  throw new Error(`baseline lane ${BASELINE_LANE} is unavailable - run \`pnpm services && pnpm load\``);
 }
 
 const host = describeHost();

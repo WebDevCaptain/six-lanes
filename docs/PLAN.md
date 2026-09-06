@@ -3,7 +3,11 @@
 A complete, self-contained build plan. A reader with no other context can execute this
 end to end.
 
-- **Status:** approved for implementation. Nothing built yet.
+- **Status:** built. See [README.md](../README.md) for how to run it,
+  [results.md](results.md) for every measurement, and [concepts.md](concepts.md) for
+  each concept tied to the number that demonstrated it. This document is kept as
+  written, as the plan of record; where the build diverged from it, the divergence and
+  the reason are noted below and in the code.
 - **Written:** 2026-09-06
 - **Companion:** `docs/diagrams/row-vs-column.excalidraw` (the mental model, read it first)
 
@@ -21,6 +25,31 @@ Nothing in this plan is stated without one of those three standing behind it. If
 unlabelled claim, treat it as ASSUMED and verify before relying on it.
 
 Sections 1 to 11 are reference. Section 12 is the build. Read 1 to 11 once, then work from 12.
+
+---
+
+## 0.1 What the build changed, and why
+
+Seven deliberate divergences. Everything else was built as written.
+
+| Plan said | Built | Why |
+| --- | --- | --- |
+| Query catalogue as `sql/queries/*.sql` | TypeScript modules in `src/queries/` | Lanes D and E run in a browser tab, where there is no filesystem. A catalogue only the server can read is not a shared catalogue. |
+| Lane C reads `read_parquet('lake/**')` from disk | Lane C reads over HTTP | DuckDB's byte counter is only accurate for reads through `httpfs`; a local read reports the footer and nothing else. Reading over HTTP is also the topology a hosted deployment uses. |
+| Q7 is `SELECT *` | Explicit column list | The lake's fact table carries a `month` partition column the heap does not, so `*` means different things per lane and the equality check would compare shapes rather than values. |
+| Q2 groups by `date_trunc('month', order_ts)` | Groups by `YYYY-MM` text | The only representation all six engines format identically, and it is the lake's partition key, so the grouping key and the pruning key are the same string. |
+| Neon and Vercel from Day 6 | Local only | Out of scope for this pass. Everything the deployment needs is in place and verified - DuckLake's relative paths, the range-request host, the slice in `public/` - but no cloud account is touched. |
+| `docs/diagrams/system.excalidraw` | The "How it works" page | Same job in a form that can be kept correct by the code it describes. |
+| Q5 defaults to exact or approximate distinct: undecided | Exact | Measured: DuckDB 1.5.3's `approx_count_distinct` is 12-25% off for a 1.3-2.9x speedup. |
+
+Two things the plan did not anticipate, both found by measurement:
+
+- **DuckDB takes its timezone from the host.** On a machine east of Greenwich, an
+  order placed at 19:00 UTC on 28 February was reported as March. Fixed at instance
+  and connection level, with tests over every month boundary in the dataset.
+- **pg_duckdb declines silently.** Four of the seven queries fall back to plain
+  Postgres with a warning no client surfaces, so lane F now checks the plan and
+  reports which engine actually ran.
 
 ---
 

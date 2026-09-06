@@ -6,7 +6,7 @@ Every measurement, appended as taken. Numbers only - the reasoning lives in
 Reproduce any of it with:
 
 ```
-pnpm up && pnpm generate && pnpm load && pnpm compare --write
+pnpm services && pnpm generate && pnpm load && pnpm ducklake && pnpm compare --write
 ```
 
 ---

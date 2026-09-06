@@ -29,18 +29,26 @@ node --version     # v24+
 pnpm --version     # v11+
 
 pnpm install
-pnpm up            # Postgres 18 and an nginx serving the lake
+pnpm services      # Postgres 18 and an nginx serving the lake
 pnpm generate      # seeded dataset -> data/olap.duckdb
 pnpm load          # -> Postgres star schema + raw Parquet lake
 pnpm ducklake      # -> DuckLake, catalog in Postgres
+pnpm slice         # -> what the browser downloads
 pnpm compare       # the table this project exists to produce
 ```
 
-Then, for the page:
+Or `pnpm bootstrap` for all of that except the last line. Then:
 
 ```bash
-pnpm slice         # builds what the browser downloads
 pnpm dev           # http://localhost:3000
+```
+
+Lane F needs one more container, and about a gigabyte of image:
+
+```bash
+pnpm services:pgduckdb
+pnpm load          # loads the same star into it
+pnpm bench         # every server lane, including F
 ```
 
 Every container is declared in `docker-compose.yml`. Nothing is started by an ad-hoc
@@ -48,7 +56,7 @@ Every container is declared in `docker-compose.yml`. Nothing is started by an ad
 
 | Command | What it does |
 | --- | --- |
-| `pnpm up` / `pnpm down` / `pnpm reset` | containers; `reset` drops the volumes too |
+| `pnpm services` / `:down` / `:reset` | containers; `:reset` drops the volumes too. Not `pnpm up`, which is pnpm's own alias for `update` |
 | `pnpm generate` | seeded dataset and star schema into `data/olap.duckdb` |
 | `pnpm load` | Postgres star + generation 1 lake (+ pg_duckdb if running) |
 | `pnpm ducklake` | generation 2 lake, catalog in Postgres, proves portability |
@@ -60,6 +68,12 @@ Every container is declared in `docker-compose.yml`. Nothing is started by an ad
 | `pnpm measures` | additive vs non-additive, exact vs approximate distinct |
 | `pnpm test` | unit tests. `pnpm test:integration` needs the containers and data |
 | `pnpm dev` | the page |
+| `pnpm bootstrap` | services, generate, load, ducklake and slice in one go |
+
+Script names avoid pnpm's own commands: `services` rather than `up`, `bootstrap` rather
+than `setup`. Both of those are pnpm builtins, and a script sharing the name is
+silently shadowed - `pnpm up` would update your dependency tree instead of starting a
+database.
 
 Bigger dataset: `OLAP_ROWS=10000000 pnpm generate && pnpm load && pnpm ducklake`.
 It takes about eight minutes and needs ~2 GB in Postgres.

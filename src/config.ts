@@ -90,7 +90,7 @@ export const LAKE_BASE_URL = process.env.OLAP_LAKE_URL ?? 'http://localhost:8080
 export const POSTGRES_URL =
   process.env.OLAP_POSTGRES_URL ?? 'postgres://postgres:postgres@localhost:55432/olap';
 
-/** Lane F only. `pnpm up:pgduckdb` starts it. */
+/** Lane F only. `pnpm services:pgduckdb` starts it. */
 export const PGDUCKDB_URL =
   process.env.OLAP_PGDUCKDB_URL ?? 'postgres://postgres:postgres@localhost:55433/olap';
 

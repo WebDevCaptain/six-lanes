@@ -43,7 +43,7 @@ export default async function BenchPage() {
       <main className="page prose">
         <h1>Local bench</h1>
         <p>
-          No results recorded yet. Run <code>pnpm up:pgduckdb</code>, then{' '}
+          No results recorded yet. Run <code>pnpm services:pgduckdb</code>, then{' '}
           <code>pnpm load</code> and <code>pnpm bench</code>.
         </p>
         <p>

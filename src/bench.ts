@@ -55,7 +55,7 @@ const missing = LANES.filter((id) => !lanes.some((lane) => lane.id === id));
 console.log(`${describeHost(host)}\n`);
 if (missing.length > 0) {
   console.log(`unavailable, skipped: ${missing.join(', ')}`);
-  if (missing.includes('pg-duckdb')) console.log('  (start lane F with `pnpm up:pgduckdb`)');
+  if (missing.includes('pg-duckdb')) console.log('  (start lane F with `pnpm services:pgduckdb`)');
   console.log('');
 }
 

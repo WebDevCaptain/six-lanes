@@ -2,10 +2,14 @@ name: olap-postgres
 
 # Every container this project needs. Nothing is started by an ad-hoc `docker run`.
 #
-#   pnpm up            -> pg + lake-http          (Days 1-6)
-#   pnpm up:pgduckdb   -> the above + pgduckdb    (Day 7, pulls a ~1 GB image)
-#   pnpm down          -> stop everything, keep the volumes
-#   pnpm reset         -> stop everything, DROP the volumes, start clean
+#   pnpm services            -> pg + lake-http     (Days 1-6)
+#   pnpm services:pgduckdb   -> plus pgduckdb      (Day 7, pulls a ~1 GB image)
+#   pnpm services:down       -> stop, keep the volumes
+#   pnpm services:reset      -> stop, DROP the volumes, start clean
+#
+# Named `services` rather than `up`: `pnpm up` is pnpm's own alias for `update`, so a
+# script called `up` is shadowed and running it would update the dependency tree
+# instead of starting a database.
 
 services:
   # Lane A baseline and, from Day 3, the DuckLake catalog.

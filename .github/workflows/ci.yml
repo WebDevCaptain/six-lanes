@@ -34,7 +34,7 @@ jobs:
       - run: pnpm test
 
       - name: Start Postgres and the lake host
-        run: pnpm up
+        run: pnpm services
 
       - name: Build the dataset and every store the lanes read
         run: |

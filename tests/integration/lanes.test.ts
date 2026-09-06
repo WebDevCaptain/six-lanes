@@ -9,7 +9,7 @@ import type { Lane, LaneId, LaneResult } from '../../src/types';
  * The gate from plan section 9 rule 1, as a test rather than a promise.
  *
  * Needs the containers up and the data loaded:
- *   pnpm up && pnpm generate && pnpm load && pnpm test:integration
+ *   pnpm services && pnpm generate && pnpm load && pnpm ducklake && pnpm test:integration
  */
 const LANES: readonly LaneId[] = ['postgres', 'duckdb-postgres', 'duckdb-lake'];
 

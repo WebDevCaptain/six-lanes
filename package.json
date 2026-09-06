@@ -8,10 +8,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "up": "docker compose up -d --wait pg lake-http",
-    "up:pgduckdb": "docker compose --profile pgduckdb up -d --wait",
-    "down": "docker compose down",
-    "reset": "docker compose down -v && docker compose up -d --wait pg lake-http",
+    "services": "docker compose up -d --wait pg lake-http",
+    "services:pgduckdb": "docker compose --profile pgduckdb up -d --wait",
+    "services:down": "docker compose down",
+    "services:reset": "docker compose down -v && docker compose up -d --wait pg lake-http",
     "generate": "tsx src/generate.ts",
     "load": "tsx src/load.ts",
     "compare": "tsx src/compare.ts",
@@ -23,7 +23,7 @@
     "study": "tsx src/study.ts",
     "ducklake": "tsx src/ducklake.ts",
     "gaps": "tsx src/gaps.ts",
-    "setup": "pnpm up && pnpm generate && pnpm load && pnpm ducklake",
+    "bootstrap": "pnpm services && pnpm generate && pnpm load && pnpm ducklake && pnpm slice",
     "measures": "tsx src/measures.ts",
     "slice": "tsx src/slice.ts",
     "dev": "next dev",

@@ -51,7 +51,7 @@ if (await isReachable(PGDUCKDB_URL)) {
   console.log('\nloading the same star into pg_duckdb (lane F)...');
   console.log(describeLoad(await loadStar(duck, PGDUCKDB_URL, 'pgd')));
 } else {
-  console.log('\nlane F skipped: pg_duckdb is not running (`pnpm up:pgduckdb`)');
+  console.log('\nlane F skipped: pg_duckdb is not running (`pnpm services:pgduckdb`)');
 }
 
 duck.disconnectSync();
