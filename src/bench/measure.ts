@@ -1,12 +1,27 @@
 /**
- * Plan section 9 rule 2: median and p95 of repeated runs, never a mean.
+ * The measurement protocol, and nothing that needs a filesystem.
+ *
+ * This module is imported by the browser lanes as well as the server ones, so it
+ * stays free of `node:` imports. That constraint is why the run counts live here
+ * rather than in src/config.ts.
+ */
+export const BENCH = {
+  warmupRuns: 1,
+  /**
+   * Five, per plan section 9 rule 2. Not configurable: it is the protocol every
+   * published number in this repo was produced under, and a knob would let two runs
+   * be compared that were not measured the same way.
+   */
+  timedRuns: 5,
+} as const;
+
+/**
+ * Median. Even-sized samples take the mean of the middle two.
  *
  * A mean lets one scheduler hiccup move a published number. The median cannot be
  * moved by a single sample, and p95 says what the bad case looks like, which is the
  * pair a reader can actually act on.
  */
-
-/** Median. Even-sized samples take the mean of the middle two. */
 export function median(values: readonly number[]): number {
   const sorted = sortedCopy(values);
   const middle = sorted.length >> 1;

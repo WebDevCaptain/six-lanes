@@ -1,5 +1,5 @@
-import { table } from './dialect.js';
-import type { QueryDef } from './types.js';
+import { table } from './dialect';
+import type { QueryDef } from './types';
 
 /**
  * Q7 - the query the row store wins.

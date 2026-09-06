@@ -1,11 +1,11 @@
 import type { DuckDBConnection } from '@duckdb/node-api';
 
-import { connectDuckDB } from '../duckdb/connect.js';
-import { bindAll, createProfiler } from '../duckdb/profile.js';
-import { TABLES } from '../queries/dialect.js';
-import type { QueryValue } from '../queries/types.js';
-import type { Lane, LaneId } from '../types.js';
-import { createLane, type LaneSpec } from './create-lane.js';
+import { connectDuckDB } from '../duckdb/connect';
+import { bindAll, createProfiler } from '../duckdb/profile';
+import { TABLES } from '../queries/dialect';
+import type { QueryValue } from '../queries/types';
+import type { Lane, LaneId } from '../types';
+import { createLane, type LaneSpec } from './create-lane';
 
 /**
  * Every server-side DuckDB lane. Lane B reads Postgres over the wire, lane C reads

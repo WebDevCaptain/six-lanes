@@ -3,13 +3,13 @@ import { join } from 'node:path';
 
 import type { DuckDBConnection } from '@duckdb/node-api';
 
-import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../config.js';
+import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../config';
 import {
   discoverParquetFiles,
   parquetRelation,
   totalBytes,
   waitForLakeFiles,
-} from '../lake/raw-lake.js';
+} from '../lake/raw-lake';
 
 /**
  * Day 2: the layout study.

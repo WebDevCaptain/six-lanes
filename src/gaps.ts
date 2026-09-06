@@ -3,11 +3,11 @@ import { join } from 'node:path';
 
 import pg from 'pg';
 
-import { formatMs } from './bench/table.js';
-import { PATHS, POSTGRES_URL } from './config.js';
-import { connectDuckDB, scalar } from './duckdb/connect.js';
-import { attachDuckLakeSql, metadataTable } from './lake/ducklake.js';
-import { discoverParquetFiles } from './lake/raw-lake.js';
+import { formatMs } from './bench/table';
+import { PATHS, POSTGRES_URL } from './config';
+import { connectDuckDB, scalar } from './duckdb/connect';
+import { attachDuckLakeSql, metadataTable } from './lake/ducklake';
+import { discoverParquetFiles } from './lake/raw-lake';
 
 /**
  * `pnpm gaps` - the six things raw Parquet cannot do, demonstrated, then done.

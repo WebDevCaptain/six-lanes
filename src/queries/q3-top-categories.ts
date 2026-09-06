@@ -1,5 +1,5 @@
-import { rangeFilter, table } from './dialect.js';
-import type { QueryDef } from './types.js';
+import { rangeFilter, table } from './dialect';
+import type { QueryDef } from './types';
 
 /**
  * Q3 - top categories by revenue in a window.

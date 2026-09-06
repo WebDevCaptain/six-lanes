@@ -13,4 +13,6 @@ data/
 lake/raw/
 lake/ducklake/
 lake/study/
-app/public/pglite/
+public/slice/
+.next/
+next-env.d.ts

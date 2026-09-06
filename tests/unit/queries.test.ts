@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_PARAMS, QUERIES, QUERY_IDS, getQuery } from '../../src/queries/index.js';
-import type { SqlTarget } from '../../src/queries/types.js';
+import { DEFAULT_PARAMS, QUERIES, QUERY_IDS, getQuery } from '../../src/queries/index';
+import type { SqlTarget } from '../../src/queries/types';
 
 const heap: SqlTarget = { dialect: 'postgres', schema: '', partitioned: false };
 const lake: SqlTarget = { dialect: 'duckdb', schema: 'lake.', partitioned: true };

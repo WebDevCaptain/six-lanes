@@ -1,6 +1,6 @@
 import { appendFileSync } from 'node:fs';
 
-import { findMismatches } from './bench/compare.js';
+import { findMismatches } from './bench/compare';
 import {
   formatBytes,
   formatCount,
@@ -8,12 +8,12 @@ import {
   renderMarkdownTable,
   renderTable,
   type Column,
-} from './bench/table.js';
-import { DATASET, PATHS } from './config.js';
-import { describeHost } from './host.js';
-import { BASELINE_LANE, LANE_META, openAvailableLanes } from './lanes/index.js';
-import { DEFAULT_PARAMS, QUERY_IDS, getQuery, type QueryId } from './queries/index.js';
-import type { Lane, LaneId, LaneResult } from './types.js';
+} from './bench/table';
+import { DATASET, PATHS } from './config';
+import { describeHost } from './host';
+import { BASELINE_LANE, LANE_META, openAvailableLanes } from './lanes/index';
+import { DEFAULT_PARAMS, QUERY_IDS, getQuery, type QueryId } from './queries/index';
+import type { Lane, LaneId, LaneResult } from './types';
 
 /**
  * `pnpm compare` - runs every available lane over every query, checks that they

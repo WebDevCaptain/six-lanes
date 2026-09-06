@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { DuckDBConnection } from '@duckdb/node-api';
 
-import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../../src/config.js';
-import { connectDuckDB, scalar } from '../../src/duckdb/connect.js';
-import { createProfiler, type DuckDBProfiler } from '../../src/duckdb/profile.js';
+import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../../src/config';
+import { connectDuckDB, scalar } from '../../src/duckdb/connect';
+import { createProfiler, type DuckDBProfiler } from '../../src/duckdb/profile';
 import {
   DUCKLAKE,
   DUCKLAKE_EXTENSIONS,
   attachDuckLakeSql,
   metadataTable,
-} from '../../src/lake/ducklake.js';
-import { TABLES } from '../../src/queries/dialect.js';
-import { discoverParquetFiles } from '../../src/lake/raw-lake.js';
+} from '../../src/lake/ducklake';
+import { TABLES } from '../../src/queries/dialect';
+import { discoverParquetFiles } from '../../src/lake/raw-lake';
 
 const FACT = `${DUCKLAKE.alias}.${TABLES.fact}`;
 const PRODUCT = `${DUCKLAKE.alias}.${TABLES.product}`;

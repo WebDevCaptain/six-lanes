@@ -1,8 +1,8 @@
 import pg from 'pg';
 
-import { createLane, type LaneSpec } from './create-lane.js';
-import type { QueryValue } from '../queries/types.js';
-import type { Lane, LaneId, QueryMetrics } from '../types.js';
+import { createLane, type LaneSpec } from './create-lane';
+import type { QueryValue } from '../queries/types';
+import type { Lane, LaneId, QueryMetrics } from '../types';
 
 /**
  * Lane A - Postgres 18 doing an OLAP job. The baseline everything is measured

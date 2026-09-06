@@ -1,9 +1,8 @@
-import { BENCH } from '../config.js';
-import { median, percentile95, timed } from '../bench/measure.js';
-import { normalizeRows } from '../bench/normalize.js';
-import { getQuery, type QueryId } from '../queries/index.js';
-import type { QueryParams, QueryValue, SqlTarget } from '../queries/types.js';
-import type { Lane, LaneId, LaneResult, QueryMetrics } from '../types.js';
+import { BENCH, median, percentile95, timed } from '../bench/measure';
+import { normalizeRows } from '../bench/normalize';
+import { getQuery, type QueryId } from '../queries/index';
+import type { QueryParams, QueryValue, SqlTarget } from '../queries/types';
+import type { Lane, LaneId, LaneResult, QueryMetrics } from '../types';
 
 /** Everything about a lane except how it is measured. */
 export interface LaneSpec {

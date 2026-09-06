@@ -1,5 +1,5 @@
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 /**
  * Every path, connection string and dataset dimension in one place.
@@ -9,7 +9,21 @@ import { fileURLToPath } from 'node:url';
  * nobody turns is just a place for the code to disagree with itself.
  */
 
-export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
+/**
+ * The repository root, taken from the working directory.
+ *
+ * Not derived from `import.meta.url`: Next.js bundles the server code, and a path
+ * relative to a bundled module points into `.next`. Every documented entry point is
+ * a pnpm script or `next dev`, and both run with the package root as the working
+ * directory - so this is checked rather than assumed.
+ */
+export const REPO_ROOT = (() => {
+  const root = process.cwd();
+  if (!existsSync(resolve(root, 'package.json'))) {
+    throw new Error(`run this from the repository root; ${root} is not it`);
+  }
+  return root;
+})();
 
 const fromRoot = (...segments: string[]): string => resolve(REPO_ROOT, ...segments);
 
@@ -53,6 +67,8 @@ export const PATHS = {
   duckLake: fromRoot('lake/ducklake'),
   /** Day 2 layout study output. */
   study: fromRoot('lake/study'),
+  /** What the browser downloads. Served by Next.js straight out of public/. */
+  slice: fromRoot('public/slice'),
   results: fromRoot('docs/results.md'),
 } as const;
 
@@ -76,8 +92,18 @@ export const POSTGRES_URL =
 export const PGDUCKDB_URL =
   process.env.OLAP_PGDUCKDB_URL ?? 'postgres://postgres:postgres@localhost:55433/olap';
 
-/** Measurement protocol, plan section 9 rule 2. */
-export const BENCH = {
-  warmupRuns: 1,
-  timedRuns: int('OLAP_RUNS', 5),
+/**
+ * The browser slice.
+ *
+ * Lanes D and E download their data before they can answer anything, so the size of
+ * that download is part of their honest cost. The cap is enforced by `pnpm slice`,
+ * which refuses to write an artefact that exceeds it, and the row count it settles on
+ * is displayed on screen next to their timings.
+ */
+export const SLICE = {
+  /** Hard cap on the download, per engine. */
+  budgetBytes: 25 * 1024 * 1024,
+  /** Upper bound on fact rows; the slice takes whole recent months up to this. */
+  maxRows: int('OLAP_SLICE_ROWS', 250_000),
 } as const;
+

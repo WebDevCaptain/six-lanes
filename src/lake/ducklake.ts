@@ -1,5 +1,5 @@
-import { POSTGRES_URL } from '../config.js';
-import { toLibpqConnectionString } from '../postgres/connection.js';
+import { POSTGRES_URL } from '../config';
+import { toLibpqConnectionString } from '../postgres/connection';
 
 /**
  * Generation 2 of the lake: DuckLake.

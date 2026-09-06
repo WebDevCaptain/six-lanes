@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { FOREVER_MICROS, buildCustomers, type CustomerVersion } from '../../src/data/customers.js';
-import { findScd2Violations, type Scd2Row } from '../../src/data/scd2.js';
+import { FOREVER_MICROS, buildCustomers, type CustomerVersion } from '../../src/data/customers';
+import { findScd2Violations, type Scd2Row } from '../../src/data/scd2';
 
 /**
  * The SCD2 dimension, and the checker that guards it.

@@ -1,4 +1,4 @@
-import type { LaneId } from '../types.js';
+import type { LaneId } from '../types';
 
 /**
  * Section 5 of the plan as data. Pure - no engine imports - because the browser

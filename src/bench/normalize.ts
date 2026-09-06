@@ -1,5 +1,5 @@
-import type { ColumnSpec, ColumnType } from '../queries/types.js';
-import type { Cell, Row } from '../types.js';
+import type { ColumnSpec, ColumnType } from '../queries/types';
+import type { Cell, Row } from '../types';
 
 /**
  * One canonical form for every engine's output.

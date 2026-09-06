@@ -1,5 +1,5 @@
-import type { QueryId } from './queries/index.js';
-import type { QueryParams, QueryValue } from './queries/types.js';
+import type { QueryId } from './queries/index';
+import type { QueryParams, QueryValue } from './queries/types';
 
 /**
  * One cell of a result, after normalisation. Money arrives as a fixed-2 string so

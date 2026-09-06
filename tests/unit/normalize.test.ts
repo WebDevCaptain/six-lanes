@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeRows, toFixed2 } from '../../src/bench/normalize.js';
-import type { ColumnSpec } from '../../src/queries/types.js';
+import { normalizeRows, toFixed2 } from '../../src/bench/normalize';
+import type { ColumnSpec } from '../../src/queries/types';
 
 /**
  * Normalisation is what makes cross-lane equality mean anything, so its edge cases

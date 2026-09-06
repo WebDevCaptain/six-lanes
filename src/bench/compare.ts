@@ -1,4 +1,4 @@
-import type { LaneResult, Row } from '../types.js';
+import type { LaneResult, Row } from '../types';
 
 /**
  * Plan section 9 rule 1: correctness gates publication.

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { REPO_ROOT } from './config.js';
+import { REPO_ROOT } from './config';
 
 /**
  * Reads DDL and maintenance scripts out of `sql/`.

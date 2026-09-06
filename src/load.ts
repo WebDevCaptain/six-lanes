@@ -2,12 +2,12 @@ import { existsSync, rmSync } from 'node:fs';
 
 import pg from 'pg';
 
-import { formatBytes, formatMs } from './bench/table.js';
-import { LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
-import { connectDuckDB } from './duckdb/connect.js';
-import { discoverParquetFiles, totalBytes } from './lake/raw-lake.js';
-import { toLibpqConnectionString } from './postgres/connection.js';
-import { readSqlFile } from './sql-files.js';
+import { formatBytes, formatMs } from './bench/table';
+import { LAKE_DIRS, PATHS, POSTGRES_URL } from './config';
+import { connectDuckDB } from './duckdb/connect';
+import { discoverParquetFiles, totalBytes } from './lake/raw-lake';
+import { toLibpqConnectionString } from './postgres/connection';
+import { readSqlFile } from './sql-files';
 
 /**
  * `pnpm load` - projects data/olap.duckdb into the stores the lanes read.

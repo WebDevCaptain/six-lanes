@@ -1,13 +1,13 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { DATASET, PATHS } from './config.js';
-import { contentFingerprint } from './data/fingerprint.js';
-import { generateDataset } from './data/generator.js';
-import { ingestOrders } from './data/ingest.js';
-import { buildStar } from './data/star.js';
-import { connectDuckDB } from './duckdb/connect.js';
-import { readSqlFile } from './sql-files.js';
+import { DATASET, PATHS } from './config';
+import { contentFingerprint } from './data/fingerprint';
+import { generateDataset } from './data/generator';
+import { ingestOrders } from './data/ingest';
+import { buildStar } from './data/star';
+import { connectDuckDB } from './duckdb/connect';
+import { readSqlFile } from './sql-files';
 
 /**
  * `pnpm generate` - builds the canonical dataset at data/olap.duckdb.

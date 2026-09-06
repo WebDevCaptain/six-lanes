@@ -1,5 +1,5 @@
-import { monthOf, rangeFilter, table } from './dialect.js';
-import type { QueryDef } from './types.js';
+import { monthOf, rangeFilter, table } from './dialect';
+import type { QueryDef } from './types';
 
 /**
  * Q2 - the partition pruning query, and the only one that needs no dimension.

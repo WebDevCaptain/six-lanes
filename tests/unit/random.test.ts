@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { allocate, createRng, cumulativeWeights, deriveSeed, zipfWeights } from '../../src/data/random.js';
+import { allocate, createRng, cumulativeWeights, deriveSeed, zipfWeights } from '../../src/data/random';
 
 describe('createRng', () => {
   it('produces the same sequence for the same seed', () => {

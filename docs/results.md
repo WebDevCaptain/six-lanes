@@ -379,6 +379,202 @@ files, which is precisely its strength and precisely what a query needs.
 The whole first half of this project is a fight between the two. The second half is
 the observation that the fight was the wrong frame.
 
+## Day 4 - the star, and what a dimension is actually for
+
+The flat table became `fact_order_item` plus `dim_date`, `dim_customer` and
+`dim_product`. 240,096 customer versions of 200,000 people, because roughly one in
+six moved country or changed segment during the two years.
+
+### The SCD2 lookup is a range join, and it is not optional
+
+```sql
+JOIN dim_customer c
+  ON c.customer_id = o.customer_id
+ AND o.order_ts >= c.valid_from
+ AND o.order_ts <  c.valid_to
+```
+
+The alternative - joining on the natural key and filtering to `is_current` - is one
+character shorter and restates all of history under today's attributes. Both are one
+line of SQL, neither errors, and the difference shows up as a revenue number that
+moves when nothing happened.
+
+`tests/integration/star.test.ts` asks the same question both ways. Revenue attributed
+to the `enterprise` segment differs depending on which join you use, and the test
+asserts that it differs - so the SCD2 join can never be quietly "simplified" away.
+
+Three invariants make the dimension usable, and all three fail silently:
+
+| Broken | What happens |
+| --- | --- |
+| Two rows flagged `is_current` | every "as of today" query double counts that customer |
+| Overlapping validity ranges | the fact join fans out and revenue is counted twice |
+| A gap between ranges | an order matches no version and vanishes from the fact table |
+
+They are checked by `findScd2Violations`, and `tests/unit/customers.test.ts` breaks
+the dimension six different ways to prove the checker notices. A checker nobody has
+watched fail is not evidence.
+
+The star builder also asserts that the range join returns exactly as many rows as it
+consumed. A range join that loses or duplicates rows means the ranges are not a
+partition of time, and finding that out from a row count beats finding it out from a
+revenue total.
+
+### `count(DISTINCT)` is where Postgres and DuckDB genuinely differ
+
+Q3 and Q5 both need one. The gap is not close:
+
+| Query | A Postgres | B federated | C the lake |
+| --- | ---: | ---: | ---: |
+| top_categories (Q3) | **125.7 ms** | 32.7 ms | 10.8 ms |
+| repeat_rate (Q5) | **156.8 ms** | 56.9 ms | 16.2 ms |
+
+**Lane B beats lane A by 3.8x on Q3.** That is the first time federation has won
+anything in this project, and it refines Day 2's conclusion rather than contradicting
+it: federation loses when the *transfer* dominates and wins when the *aggregation*
+does. Same million rows over the same socket - but now DuckDB is doing something with
+them that Postgres is much slower at.
+
+The reason is architectural. Postgres has no hash-based DISTINCT aggregate, so
+`count(DISTINCT x)` requires its input sorted by `(group, x)`:
+
+```
+GroupAggregate (actual rows=8 loops=1)
+  Group Key: p.category
+  ->  Sort (actual rows=237171 loops=1)
+        Sort Key: p.category, f.order_id
+        Sort Method: external merge  Disk: 8648kB
+```
+
+The first instinct is that the 8.6 MB spill is the problem. It is not. Raising
+`work_mem` from the 4 MB default to 64 MB turned the external merge into an in-memory
+quicksort of 16 MB - and the query went from 118 ms to **125 ms**. Within noise.
+
+**The sort is the cost, not the disk.** DuckDB answers the same query in 10.8 ms with
+a hash-based distinct aggregate that never sorts anything. That is a difference you
+cannot configure your way out of, which makes it worth more than most benchmark
+numbers. (`work_mem=64MB` stays in the compose file regardless: lane A is the
+baseline and gets what a competent DBA would give it.)
+
+### Exact versus approximate distinct: the plan's open question, answered
+
+| Distinct count of | Exact | Approx | Error | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| customers, 6 months | 93,603 | 117,390 | **+25.4%** | 1.4x |
+| customers, all time | 182,187 | 184,987 | +1.5% | 2.1x |
+| orders, all time | 581,190 | 677,490 | **+16.6%** | 2.5x |
+| products, all time | 5,000 | 5,618 | **+12.4%** | 1.5x |
+
+Those errors are far outside HyperLogLog's textbook 1-2%, which is enough to suspect
+the data rather than the function. So `pnpm measures` runs a control over
+`range(n)`, whose cardinality is exact by construction:
+
+| n | approx | error |
+| ---: | ---: | ---: |
+| 1,000 | 1,249 | +24.9% |
+| 5,000 | 5,661 | +13.2% |
+| 100,000 | 96,408 | -3.6% |
+| 600,000 | 682,265 | +13.7% |
+
+It is the function. DuckDB 1.5.3's `approx_count_distinct` takes no accuracy
+parameter and is much coarser than the name suggests.
+
+**Decision: exact.** A 1.3x to 2.9x speedup does not buy a 25% error. This may invert
+at a hundred times the data - the exact count's sort grows and HLL's registers do not
+- but that is a decision to make against a measurement at that size, not this one.
+
+### Additive, non-additive, and the column that looks fine
+
+`sum(revenue)` grouped five different ways gives one number, to the cent:
+
+```
+grand total       270355036.38
+by category       270355036.38
+by month          270355036.38
+by channel        270355036.38
+by customer       270355036.38
+```
+
+`unit_price` does not behave that way, and nothing complains:
+
+| Expression | Value |
+| --- | ---: |
+| `sum(unit_price)` | 35,783,996.79 |
+| `avg(unit_price)` | 150.878 |
+| `sum(revenue + discount) / sum(quantity)` | **150.500** |
+
+The first is the sum of the prices printed on every sticker. No quantity in the
+business has that value, and it grows if you split an order into more lines - a
+measure that changes when the grain changes is not a measure.
+
+The second is the trap, because it looks like the answer. It weights a line that sold
+one unit the same as a line that sold five.
+
+The third is what people mean by average selling price. It is derived at query time
+from two additive measures, which is the only safe way to carry a ratio in a fact
+table: by not carrying it.
+
+## Day 4 - scaling to 10,000,000 rows
+
+Same generator, same seed, `OLAP_ROWS=10000000`. Everything else identical.
+
+| | 1M | 10M |
+| --- | ---: | ---: |
+| Postgres, `fact_order_item` with indexes | 198 MB | **1,959 MB** |
+| Parquet lake | 14.79 MB | **139.36 MB** |
+| Ratio | 13.4x | **14.1x** |
+| Generate | 4.9 s | 398.8 s |
+| Load into Postgres | 6.0 s | 67.0 s |
+| Build DuckLake | 0.36 s | 0.76 s |
+
+### The gap widens with scale, and not gently
+
+| Query | A at 1M | A at 10M | C at 1M | C at 10M | A:C at 1M | A:C at 10M |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| revenue_by_category | 52 ms | **830 ms** | 6.9 ms | 28.6 ms | 7.6x | **29.0x** |
+| revenue_by_month | 19 ms | 290 ms | 5.3 ms | 18.7 ms | 3.6x | 15.5x |
+| top_categories | 126 ms | **1.53 s** | 10.8 ms | 64.7 ms | 11.6x | 23.6x |
+| repeat_rate | 157 ms | **1.73 s** | 16.2 ms | 75.8 ms | 9.7x | 22.8x |
+| rolling_revenue | 27 ms | 366 ms | 9.4 ms | 35.6 ms | 2.8x | 10.3x |
+| category_by_month | 27 ms | 394 ms | 9.1 ms | 46.1 ms | 3.0x | 8.5x |
+| **order_lookup** | **0.22 ms** | **0.33 ms** | 4.4 ms | 11.6 ms | **0.05x** | **0.03x** |
+
+Ten times the data made lane C between 3x and 6x slower. It made lane A between 10x
+and 16x slower. Every ratio roughly quadrupled.
+
+The reason is visible in the byte counts. At 1M, lane A read 108 MB per scan out of a
+`shared_buffers` of 256 MB - everything was already in memory and the measurement was
+of CPU. At 10M it reads **1,062 MB** for the same query, which does not fit, so the
+warm number now includes real disk. The column store never had that problem: it reads
+34.9 MB for the same answer, because it still only needs three columns of thirteen.
+
+**A column store's advantage is not a constant factor. It grows at exactly the point
+where the row store stops fitting in memory**, which is the point at which anyone
+starts caring.
+
+### The one that goes the other way
+
+`order_lookup` moved the other direction and stayed there. Postgres went from 0.22 ms
+to 0.33 ms across a tenfold increase, because a b-tree lookup costs `log(n)` and log
+of ten times more is barely more. Lane C went from 4.4 ms to 11.6 ms.
+
+At 10M, Postgres answers a point lookup **35x faster in wall time and roughly 800x
+faster in engine time**, while losing the analytical queries by 20x to 29x. Both facts
+come from the same table, on the same machine, in the same run.
+
+### What got slower that was not a query
+
+Generating 10x the rows took **80x** the time: 4.9 s to 398.8 s. Almost all of it is
+the SCD2 range join in `src/data/star.ts`, which resolves 10,000,000 facts against
+240,096 customer versions. A range join is not a hash join - there is no equality to
+hash on for the validity window - so the cost is superlinear.
+
+That is a genuine warehousing lesson rather than a benchmark artefact. Production
+pipelines do not re-resolve the whole history nightly; they resolve keys for the batch
+being loaded, against the small set of dimension versions valid during that batch's
+window. The naive full re-join is fine at a million rows and is the first thing that
+breaks at a hundred million.
+
 ---
 
 ## Raw measurement log
@@ -547,5 +743,37 @@ Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000
 | category_by_month | A  Postgres 18 | 24.54 | 25.60 | 26.39 | 31.16 MB | 252,171 | 48 | - |
 | category_by_month | B  DuckDB over Postgres | 32.41 | 38.78 | - | - | 242,171 | 48 | - |
 | category_by_month | C  DuckDB over the lake | 9.934 | 10.66 | - | 1.49 MB | 242,171 | 48 | 7 |
+
+5 timed runs per cell after 1 warm-up; median and p95, never a mean.
+
+### 2026-09-06 05:39 UTC - 10,000,000 line items
+
+`Apple M5, 10 cores, 16 GB, darwin 25.6.0, node v24.18.0, measured 2026-09-06`
+
+Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000`
+
+| query | lane | median | p95 | engine | bytes read | rows scanned | returned | files |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| revenue_by_category | A  Postgres 18 | 782.37 | 819.66 | 855.80 | 1062.66 MB | 10,015,000 | 8 | - |
+| revenue_by_category | B  DuckDB over Postgres | 713.24 | 786.99 | - | - | 10,005,000 | 8 | - |
+| revenue_by_category | C  DuckDB over the lake | 25.59 | 26.97 | - | 34.92 MB | 10,005,000 | 8 | 25 |
+| revenue_by_month_filtered | A  Postgres 18 | 279.57 | 293.62 | 296.73 | 292.79 MB | 2,371,741 | 6 | - |
+| revenue_by_month_filtered | B  DuckDB over Postgres | 321.03 | 360.18 | - | - | 2,371,741 | 6 | - |
+| revenue_by_month_filtered | C  DuckDB over the lake | 18.10 | 20.68 | - | 9.05 MB | 2,371,741 | 6 | 6 |
+| order_lookup | A  Postgres 18 | 0.364 | 0.524 | 0.014 | 32.0 KB | 1 | 1 | - |
+| order_lookup | B  DuckDB over Postgres | 10.02 | 10.52 | - | - | 1 | 1 | - |
+| order_lookup | C  DuckDB over the lake | 11.51 | 12.83 | - | 1.69 MB | 1 | 1 | 1 |
+| top_categories | A  Postgres 18 | 1.50s | 1.52s | 1.63s | 292.80 MB | 2,376,741 | 5 | - |
+| top_categories | B  DuckDB over Postgres | 361.48 | 505.02 | - | - | 2,376,741 | 5 | - |
+| top_categories | C  DuckDB over the lake | 60.21 | 62.83 | - | 14.55 MB | 2,376,741 | 5 | 7 |
+| rolling_revenue | A  Postgres 18 | 362.68 | 375.98 | 408.71 | 292.41 MB | 2,371,925 | 184 | - |
+| rolling_revenue | B  DuckDB over Postgres | 296.72 | 346.06 | - | - | 2,371,925 | 184 | - |
+| rolling_revenue | C  DuckDB over the lake | 31.63 | 32.37 | - | 9.06 MB | 2,371,925 | 184 | 7 |
+| repeat_rate | A  Postgres 18 | 1.72s | 1.90s | 1.81s | 316.16 MB | 2,611,837 | 6 | - |
+| repeat_rate | B  DuckDB over Postgres | 630.14 | 812.13 | - | - | 2,611,837 | 6 | - |
+| repeat_rate | C  DuckDB over the lake | 71.63 | 79.92 | - | 11.66 MB | 2,611,837 | 6 | 7 |
+| category_by_month | A  Postgres 18 | 450.78 | 466.17 | 464.64 | 294.13 MB | 2,386,741 | 48 | - |
+| category_by_month | B  DuckDB over Postgres | 482.66 | 702.94 | - | - | 2,376,741 | 48 | - |
+| category_by_month | C  DuckDB over the lake | 31.85 | 34.52 | - | 13.52 MB | 2,376,741 | 48 | 7 |
 
 5 timed runs per cell after 1 warm-up; median and p95, never a mean.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { enumerateDays } from '../../src/data/calendar.js';
-import { generateDataset, type GeneratorConfig, type OrderItem } from '../../src/data/generator.js';
+import { enumerateDays } from '../../src/data/calendar';
+import { generateDataset, type GeneratorConfig, type OrderItem } from '../../src/data/generator';
 
 /**
  * The generator's contract, asserted rather than assumed.

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { findMismatches } from '../../src/bench/compare.js';
-import { median, percentile95 } from '../../src/bench/measure.js';
-import { formatBytes, formatMs, renderTable } from '../../src/bench/table.js';
-import type { LaneResult, Row } from '../../src/types.js';
+import { findMismatches } from '../../src/bench/compare';
+import { median, percentile95 } from '../../src/bench/measure';
+import { formatBytes, formatMs, renderTable } from '../../src/bench/table';
+import type { LaneResult, Row } from '../../src/types';
 
 describe('median', () => {
   it('takes the middle of an odd sample', () => {

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DuckDBInstance, type DuckDBConnection } from '@duckdb/node-api';
 import pg from 'pg';
 
-import { POSTGRES_URL } from '../../src/config.js';
-import { connectDuckDB } from '../../src/duckdb/connect.js';
+import { POSTGRES_URL } from '../../src/config';
+import { connectDuckDB } from '../../src/duckdb/connect';
 
 /**
  * One timezone, or none of the numbers mean anything.

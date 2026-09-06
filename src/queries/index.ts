@@ -1,11 +1,11 @@
-import { q1RevenueByCategory } from './q1-revenue-by-category.js';
-import { q2RevenueByMonth } from './q2-revenue-by-month.js';
-import { q3TopCategories } from './q3-top-categories.js';
-import { q4RollingRevenue } from './q4-rolling-revenue.js';
-import { q5RepeatRate } from './q5-repeat-rate.js';
-import { q6CategoryByMonth } from './q6-category-by-month.js';
-import { q7OrderLookup } from './q7-order-lookup.js';
-import type { QueryDef, QueryParams } from './types.js';
+import { q1RevenueByCategory } from './q1-revenue-by-category';
+import { q2RevenueByMonth } from './q2-revenue-by-month';
+import { q3TopCategories } from './q3-top-categories';
+import { q4RollingRevenue } from './q4-rolling-revenue';
+import { q5RepeatRate } from './q5-repeat-rate';
+import { q6CategoryByMonth } from './q6-category-by-month';
+import { q7OrderLookup } from './q7-order-lookup';
+import type { QueryDef, QueryParams } from './types';
 
 /**
  * The query catalogue: one logical question, one definition, every dialect.
@@ -50,8 +50,8 @@ export const DEFAULT_PARAMS: QueryParams = {
   limit: 5,
 };
 
-export { TABLES, table } from './dialect.js';
-export type { TableName } from './dialect.js';
+export { TABLES, table } from './dialect';
+export type { TableName } from './dialect';
 export type {
   ColumnSpec,
   ColumnType,
@@ -60,4 +60,4 @@ export type {
   QueryParams,
   QueryValue,
   SqlTarget,
-} from './types.js';
+} from './types';

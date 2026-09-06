@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 
-import { POSTGRES_URL } from '../../src/config.js';
+import { POSTGRES_URL } from '../../src/config';
 
 /**
  * The star schema's integrity, checked against the loaded data rather than the

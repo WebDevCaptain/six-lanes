@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 
-import { formatCount, formatMs, renderTable, type Column } from './bench/table.js';
-import { DEFAULT_PARAMS } from './queries/index.js';
-import { PATHS } from './config.js';
-import { connectDuckDB, scalar } from './duckdb/connect.js';
+import { formatCount, formatMs, renderTable, type Column } from './bench/table';
+import { DEFAULT_PARAMS } from './queries/index';
+import { PATHS } from './config';
+import { connectDuckDB, scalar } from './duckdb/connect';
 
 /**
  * `pnpm measures` - what you are and are not allowed to add up.

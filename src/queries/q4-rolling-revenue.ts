@@ -1,5 +1,5 @@
-import { asDate, rangeFilter, table } from './dialect.js';
-import type { QueryDef } from './types.js';
+import { asDate, rangeFilter, table } from './dialect';
+import type { QueryDef } from './types';
 
 /**
  * Q4 - 30-day rolling revenue.

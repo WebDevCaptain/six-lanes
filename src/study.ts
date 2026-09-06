@@ -7,13 +7,13 @@ import {
   renderMarkdownTable,
   renderTable,
   type Column,
-} from './bench/table.js';
-import { LAKE_DIRS, PATHS } from './config.js';
-import { connectDuckDB } from './duckdb/connect.js';
-import { createProfiler } from './duckdb/profile.js';
-import { describeHost } from './host.js';
-import { perColumnBytes, type ColumnBytes } from './study/columns.js';
-import { LAYOUT_VARIANTS, PROBES, writeVariant, type WrittenVariant } from './study/layout.js';
+} from './bench/table';
+import { LAKE_DIRS, PATHS } from './config';
+import { connectDuckDB } from './duckdb/connect';
+import { createProfiler } from './duckdb/profile';
+import { describeHost } from './host';
+import { perColumnBytes, type ColumnBytes } from './study/columns';
+import { LAYOUT_VARIANTS, PROBES, writeVariant, type WrittenVariant } from './study/layout';
 
 /**
  * `pnpm study` - the Day 2 layout study.

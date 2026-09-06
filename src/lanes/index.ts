@@ -1,10 +1,10 @@
-import { LAKE_BASE_URL, LAKE_DIRS, POSTGRES_URL } from '../config.js';
-import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql } from '../lake/ducklake.js';
-import { toLibpqConnectionString } from '../postgres/connection.js';
-import type { Lane, LaneId } from '../types.js';
-import { createDuckDBLane } from './duckdb.js';
-import { LANE_META } from './meta.js';
-import { createPostgresLane } from './postgres.js';
+import { LAKE_BASE_URL, LAKE_DIRS, POSTGRES_URL } from '../config';
+import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql } from '../lake/ducklake';
+import { toLibpqConnectionString } from '../postgres/connection';
+import type { Lane, LaneId } from '../types';
+import { createDuckDBLane } from './duckdb';
+import { LANE_META } from './meta';
+import { createPostgresLane } from './postgres';
 
 /**
  * Construction of the lanes that run on the server. Lanes D and E are browser-only
@@ -90,5 +90,5 @@ export async function openAvailableLanes(ids: readonly LaneId[]): Promise<Lane[]
   return usable;
 }
 
-export { LANE_META, LANE_ORDER, BASELINE_LANE } from './meta.js';
-export type { LaneMeta } from './meta.js';
+export { LANE_META, LANE_ORDER, BASELINE_LANE } from './meta';
+export type { LaneMeta } from './meta';

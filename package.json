@@ -24,15 +24,26 @@
     "ducklake": "tsx src/ducklake.ts",
     "gaps": "tsx src/gaps.ts",
     "setup": "pnpm up && pnpm generate && pnpm load && pnpm ducklake",
-    "measures": "tsx src/measures.ts"
+    "measures": "tsx src/measures.ts",
+    "slice": "tsx src/slice.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev57.0",
     "@duckdb/node-api": "1.5.5-r.4",
-    "pg": "8.23.0"
+    "@electric-sql/pglite": "0.5.8",
+    "next": "16.3.4",
+    "pg": "8.23.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
     "@types/pg": "8.15.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
     "vitest": "5.0.0"

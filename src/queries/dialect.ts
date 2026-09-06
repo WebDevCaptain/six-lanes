@@ -1,4 +1,4 @@
-import type { SqlTarget } from './types.js';
+import type { SqlTarget } from './types';
 
 /**
  * The handful of places the two dialects genuinely differ.

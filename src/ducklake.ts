@@ -2,13 +2,13 @@ import { existsSync, rmSync } from 'node:fs';
 
 import pg from 'pg';
 
-import { formatBytes, formatCount, formatMs } from './bench/table.js';
-import { LAKE_BASE_URL, LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
-import { connectDuckDB, scalar } from './duckdb/connect.js';
-import { createProfiler } from './duckdb/profile.js';
-import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql, metadataTable } from './lake/ducklake.js';
-import { discoverParquetFiles, totalBytes, waitForLakeFiles } from './lake/raw-lake.js';
-import { TABLES } from './queries/dialect.js';
+import { formatBytes, formatCount, formatMs } from './bench/table';
+import { LAKE_BASE_URL, LAKE_DIRS, PATHS, POSTGRES_URL } from './config';
+import { connectDuckDB, scalar } from './duckdb/connect';
+import { createProfiler } from './duckdb/profile';
+import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql, metadataTable } from './lake/ducklake';
+import { discoverParquetFiles, totalBytes, waitForLakeFiles } from './lake/raw-lake';
+import { TABLES } from './queries/dialect';
 
 /**
  * `pnpm ducklake` - builds generation 2 of the lake and proves it is portable.

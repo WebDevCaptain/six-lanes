@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { findMismatches } from '../../src/bench/compare.js';
-import { BASELINE_LANE, openAvailableLanes } from '../../src/lanes/index.js';
-import { DEFAULT_PARAMS, QUERY_IDS } from '../../src/queries/index.js';
-import type { Lane, LaneId, LaneResult } from '../../src/types.js';
+import { findMismatches } from '../../src/bench/compare';
+import { BASELINE_LANE, openAvailableLanes } from '../../src/lanes/index';
+import { DEFAULT_PARAMS, QUERY_IDS } from '../../src/queries/index';
+import type { Lane, LaneId, LaneResult } from '../../src/types';
 
 /**
  * The gate from plan section 9 rule 1, as a test rather than a promise.
