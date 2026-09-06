@@ -70,6 +70,8 @@ export const PATHS = {
   /** What the browser downloads. Served by Next.js straight out of public/. */
   slice: fromRoot('public/slice'),
   results: fromRoot('docs/results.md'),
+  /** Committed benchmark records, one JSON file per run per machine. */
+  benchResults: fromRoot('bench/results'),
 } as const;
 
 /** Directory names under {@link PATHS.lakeRoot}, which double as URL prefixes. */

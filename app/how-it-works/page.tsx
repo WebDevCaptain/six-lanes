@@ -24,6 +24,8 @@ export default function HowItWorks() {
         </div>
         <div className="environment">
           <Link href="/">Back to the race</Link>
+          <br />
+          <Link href="/bench">Local bench</Link>
         </div>
       </header>
 

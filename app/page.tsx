@@ -69,7 +69,8 @@ export default async function Page() {
           Bytes read comes from the engine itself, collected in a separate pass so that measuring
           does not change what is measured.{' '}
           <Link href="/how-it-works">How it works</Link> has the details, including what each lane
-          gives up.
+          gives up. <Link href="/bench">The local bench</Link> has lane F, which needs
+          <code> shared_preload_libraries</code> and so cannot be deployed anywhere.
         </p>
       </section>
     </main>

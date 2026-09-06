@@ -575,6 +575,127 @@ being loaded, against the small set of dimension versions valid during that batc
 window. The naive full re-join is fine at a million rows and is the first thing that
 breaks at a hundred million.
 
+## Day 5 - the browser, and the cleanest comparison in the project
+
+Lanes D and E hold the same 166,150 rows, in the same tab, on the same CPU, answering
+the same seven questions. No network between them, no server, no configuration
+difference. The only variable left is how the bytes are arranged.
+
+| Question | D  DuckDB-WASM | E  PGlite | ratio |
+| --- | ---: | ---: | ---: |
+| revenue per category | 15.8 ms | 88.0 ms | **5.6x** |
+| revenue per month | 12.0 ms | 128.6 ms | **10.7x** |
+| top categories | 26.0 ms | 335.5 ms | **12.9x** |
+| 30-day rolling revenue | 16.3 ms | 86.3 ms | **5.3x** |
+| repeat rate | 30.3 ms | 421.3 ms | **13.9x** |
+| revenue by category by month | 19.3 ms | 176.3 ms | **9.1x** |
+| **one order by id** | 11.8 ms | **0.270 ms** | **0.02x** |
+
+Vectorised columnar execution beats tuple-at-a-time by 5x to 14x on the analytical
+questions and loses the point lookup by 44x. That is the entire thesis of this
+project with every confounder removed.
+
+PGlite reports itself as **PostgreSQL 18.3**, against the server's 18.4 - close enough
+that lane E is a fair stand-in for lane A's engine, running on the reader's own laptop.
+
+### Shipping the data costs more than answering the question
+
+For **identical rows**:
+
+| | Lane D, Parquet | Lane E, Postgres datadir |
+| --- | ---: | ---: |
+| Download | **2.96 MB** | **24.13 MB** |
+| Share of the 25 MB budget | 12% | 97% |
+| Start-up after download | 517 ms | 516 ms |
+
+**8.1x.** Same 166,150 line items, same four tables, same indexes on the Postgres side
+because removing them would have made lane E a straw man. A row store carries its
+per-row overhead onto the wire; a column store compresses each column against its own
+neighbours and then only sends the columns that were asked for.
+
+This is also why the browser slice is row-capped: `pnpm slice` builds, measures, and
+rebuilds smaller until both artefacts fit, so the row count is a consequence of the
+budget rather than a constant somebody guessed. It settled at 160-166k rows.
+
+### Three bugs the correctness gate caught that no unit test would have
+
+None of these threw. All three produced plausible numbers.
+
+1. **DuckDB-WASM returns Arrow DECIMALs unscaled.** Revenue of 3,237,919.01 arrived as
+   323791901 and rendered as a hundred times too much money. The scale is in the Arrow
+   schema; `toJSON()` does not apply it.
+2. **It declares TIMESTAMPTZ as MICROSECOND and hands over milliseconds.** Rescaling by
+   the declared unit put a July 2025 order in January 1970.
+3. **The slice was cut from the wrong end of the dataset.** It held the most recent
+   days while the questions ask about a window in the middle, so lanes D and E answered
+   every range query with nothing - and agreed perfectly with a reference that also
+   returned nothing. **A vacuous pass looks exactly like success.** The slice is now cut
+   from inside the window, the build fails if it does not contain the order Q7 asks
+   for, and the page flags a browser lane that returns nothing when the server did not.
+
+The third is the one worth remembering. The first two were caught because two engines
+disagreed. The third was caught only because somebody asked why a passing lane had no
+rows in it.
+
+---
+
+## Day 7 - pg_duckdb, and a lane that lies unless you check
+
+Lane F embeds DuckDB inside Postgres. Same wire protocol, same SQL, same client code
+as lane A, with `duckdb.force_execution = true` and nothing else changed. Both
+instances are loaded from the same DuckDB file in the same run, so "identical data" is
+literally true.
+
+### It ran three of the seven queries
+
+| Query | A  Postgres | F  pg_duckdb | Ran on |
+| --- | ---: | ---: | --- |
+| revenue_by_category | 41.6 ms | **68.6 ms** | DuckDB |
+| top_categories | 122.8 ms | **34.0 ms** | DuckDB |
+| order_lookup | 0.247 ms | **2.88 ms** | DuckDB |
+| revenue_by_month_filtered | 21.2 ms | 19.6 ms | Postgres (DuckDB declined) |
+| rolling_revenue | 26.4 ms | 27.6 ms | Postgres (DuckDB declined) |
+| repeat_rate | 157.7 ms | 173.1 ms | Postgres (DuckDB declined) |
+| category_by_month | 25.4 ms | 26.6 ms | Postgres (DuckDB declined) |
+
+**pg_duckdb does not fail when DuckDB cannot run something.** It emits a warning no
+client surfaces, plans the query the ordinary Postgres way, and returns the right
+answer at ordinary Postgres speed:
+
+```
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error:
+Catalog Error: Scalar Function with name to_char does not exist!
+```
+
+Four of the seven queries group by month, all four use `to_char`, and DuckDB has no
+`to_char`. `force_execution = true` does not force anything here - it cannot force a
+function that does not exist.
+
+So lane F checks the plan for a `Custom Scan (DuckDBScan)` before publishing anything,
+and reports which engine actually ran. The four fallback rows land within noise of
+lane A **because they are lane A**, which is a nice independent confirmation that the
+check works.
+
+### Where it helps, where it hurts
+
+Of the three it did run, it won one:
+
+- **top_categories, 3.6x faster.** This is the `count(DISTINCT ...)` query, where
+  Postgres must sort its input per group and DuckDB uses a hash aggregate. The
+  computation dominates, and pg_duckdb is doing the computation.
+- **revenue_by_category, 1.65x slower.** A plain `sum` over a full scan. The scan
+  dominates, and pg_duckdb is still reading Postgres heap tuples one at a time and
+  converting them into vectors before it can do anything clever. The conversion costs
+  more than the vectorisation saves.
+- **order_lookup, 11.7x slower.** Vectorised execution has nothing to offer a b-tree
+  probe for three rows, and the setup is pure overhead.
+
+**pg_duckdb accelerates computation, not storage.** It gets you DuckDB's execution
+engine over Postgres' row-oriented pages, which is worth having exactly when the
+aggregate is the bottleneck. It cannot give you column pruning, partition pruning or
+compressed columnar scans, because the bytes on disk are still rows. Lane C reads
+1.60 MB to answer the query lane F wins; lane F reads the whole heap.
+
 ---
 
 ## Raw measurement log

@@ -1,4 +1,4 @@
-import { LAKE_BASE_URL, LAKE_DIRS, POSTGRES_URL } from '../config';
+import { LAKE_BASE_URL, LAKE_DIRS, PGDUCKDB_URL, POSTGRES_URL } from '../config';
 import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql } from '../lake/ducklake';
 import { toLibpqConnectionString } from '../postgres/connection';
 import type { Lane, LaneId } from '../types';
@@ -69,6 +69,33 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       schema: `${DUCKLAKE.alias}.`,
       partitioned: true,
       uncachedMetrics: true,
+    }),
+
+  /**
+   * Lane F - DuckDB embedded inside Postgres.
+   *
+   * The same client, the same wire protocol and the same SQL as lane A, with one
+   * session setting changed. Sharing the lane implementation is what makes the
+   * comparison fair: anything else and the two would differ in the harness as well
+   * as in the engine.
+   */
+  'pg-duckdb': () =>
+    createPostgresLane({
+      id: 'pg-duckdb',
+      label: LANE_META['pg-duckdb'].label,
+      connectionString: PGDUCKDB_URL,
+      handicaps: LANE_META['pg-duckdb'].handicaps,
+      sessionSetup: [
+        `CREATE EXTENSION IF NOT EXISTS pg_duckdb`,
+        // Without this, pg_duckdb only takes over queries it is confident about, and
+        // the lane would silently be measuring plain Postgres on some questions.
+        `SET duckdb.force_execution = true`,
+      ],
+      // The plan under this setting is DuckDB's. Postgres' buffer counters describe
+      // a heap access method that is not the one doing the work, so reporting them
+      // would attach a real-looking number to the wrong thing.
+      reportBuffers: false,
+      detectExecutor: true,
     }),
 };
 

@@ -33,6 +33,14 @@ export interface QueryMetrics {
    */
   readonly columnsProjected?: readonly string[] | undefined;
   /**
+   * Which engine actually ran the query, when that is not a given.
+   *
+   * pg_duckdb accepts every statement and quietly hands back the ones DuckDB cannot
+   * translate, with a WARNING that no client surfaces and no error. Without this
+   * field lane F would publish plain-Postgres timings under a DuckDB label.
+   */
+  readonly executedBy?: string | undefined;
+  /**
    * Predicates the engine pushed into the storage layer.
    *
    * Lane B's headline metric. Federation's whole bet is that the remote side does

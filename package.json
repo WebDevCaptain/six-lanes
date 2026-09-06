@@ -28,7 +28,8 @@
     "slice": "tsx src/slice.ts",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "bench": "tsx src/bench.ts"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.33.1-dev57.0",

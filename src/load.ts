@@ -1,18 +1,16 @@
 import { existsSync, rmSync } from 'node:fs';
 
-import pg from 'pg';
-
 import { formatBytes, formatMs } from './bench/table';
-import { LAKE_DIRS, PATHS, POSTGRES_URL } from './config';
+import { LAKE_DIRS, PATHS, PGDUCKDB_URL, POSTGRES_URL } from './config';
 import { connectDuckDB } from './duckdb/connect';
 import { discoverParquetFiles, totalBytes } from './lake/raw-lake';
-import { toLibpqConnectionString } from './postgres/connection';
-import { readSqlFile } from './sql-files';
+import { describeLoad, isReachable, loadStar } from './postgres/load-star';
 
 /**
  * `pnpm load` - projects data/olap.duckdb into the stores the lanes read.
  *
  *   Postgres        the star schema: lane A, and the host of DuckLake's catalog
+ *   pg_duckdb       the same star again, for lane F, when that container is running
  *   lake/raw/       generation 1 of the lake, written from the flat `orders` table
  *
  * Generation 2 is built separately by `pnpm ducklake`, because its catalog lives in
@@ -25,9 +23,6 @@ import { readSqlFile } from './sql-files';
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
 }
-
-/** Dimensions before the fact: the fact's foreign keys point at them. */
-const DIMENSIONS = ['dim_date', 'dim_customer', 'dim_product'] as const;
 
 const duck = await connectDuckDB({ path: PATHS.database, extensions: ['postgres'] });
 
@@ -46,43 +41,19 @@ const lakeMs = await time(async () => {
 const partitions = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
 console.log(`  ${partitions.length} partitions, ${formatBytes(totalBytes(partitions))}, ${lakeMs}\n`);
 
-console.log('loading the star into Postgres...');
-const client = new pg.Client({ connectionString: POSTGRES_URL });
-await client.connect();
-await client.query(`SET TimeZone = 'UTC'`);
+console.log('loading the star into Postgres (lane A)...');
+console.log(describeLoad(await loadStar(duck, POSTGRES_URL, 'pg')));
 
-// DDL through the Postgres client, not through DuckDB's ATTACH: the schema is
-// Postgres' own - PRIMARY KEY, REFERENCES, NUMERIC(12,2) - and running it verbatim
-// keeps it out of a type translation layer.
-await client.query(readSqlFile('03_star.postgres.sql'));
-
-const insertMs = await time(async () => {
-  await duck.run(`ATTACH '${toLibpqConnectionString(POSTGRES_URL)}' AS pg (TYPE postgres)`);
-  for (const table of DIMENSIONS) await duck.run(`INSERT INTO pg.${table} SELECT * FROM ${table}`);
-  // `month` exists only in the lake copy, as its Hive partition key. The heap has no
-  // partitions, so storing it would be megabytes of redundant text.
-  await duck.run(`INSERT INTO pg.fact_order_item SELECT * EXCLUDE (month) FROM fact_order_item`);
-  await duck.run(`DETACH pg`);
-});
-console.log(`  rows inserted, ${insertMs}`);
-
-const tuneMs = await time(() => client.query(readSqlFile('04_tune_star.postgres.sql')));
-console.log(`  indexes, statistics and ANALYZE, ${tuneMs}\n`);
-
-const sizes = await client.query<{ table: string; rows: string; total: string }>(`
-  SELECT c.relname                                     AS table,
-         to_char(c.reltuples, 'FM999,999,999')         AS rows,
-         pg_size_pretty(pg_total_relation_size(c.oid)) AS total
-  FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE n.nspname = 'public' AND c.relkind = 'r'
-  ORDER BY pg_total_relation_size(c.oid) DESC
-`);
-for (const row of sizes.rows) {
-  console.log(`  ${row.table.padEnd(18)}${row.rows.padStart(12)} rows   ${row.total}`);
+// Lane F is optional: it needs a container that cannot be deployed anywhere, so the
+// rest of the project has to work without it. Loading it here rather than in a
+// separate script is what guarantees both instances hold byte-identical rows.
+if (await isReachable(PGDUCKDB_URL)) {
+  console.log('\nloading the same star into pg_duckdb (lane F)...');
+  console.log(describeLoad(await loadStar(duck, PGDUCKDB_URL, 'pgd')));
+} else {
+  console.log('\nlane F skipped: pg_duckdb is not running (`pnpm up:pgduckdb`)');
 }
 
-await client.end();
 duck.disconnectSync();
 
 console.log('\nnext: `pnpm ducklake` to build generation 2, then `pnpm compare`');

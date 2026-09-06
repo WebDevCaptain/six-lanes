@@ -22,6 +22,12 @@ export interface PostgresLaneOptions {
   readonly sessionSetup?: readonly string[];
   /** Lane F's plans are DuckDB's, and Postgres buffer counters do not describe them. */
   readonly reportBuffers?: boolean;
+  /**
+   * Check which engine the plan actually belongs to.
+   *
+   * Only lane F needs this, and it needs it badly: see {@link detectExecutor}.
+   */
+  readonly detectExecutor?: boolean;
 }
 
 const BLOCK_BYTES = 8192;
@@ -51,10 +57,10 @@ export async function createPostgresLane(options: PostgresLaneOptions): Promise<
 
     execute: async (sql, params) => (await client.query(sql, [...params])).rows,
 
-    measure: async (sql, params) =>
-      options.reportBuffers === false
-        ? {}
-        : explain(client, sql, params),
+    measure: async (sql, params) => ({
+      ...(options.reportBuffers === false ? {} : await explain(client, sql, params)),
+      ...(options.detectExecutor ? await detectExecutor(client, sql, params) : {}),
+    }),
 
     close: () => client.end(),
   };
@@ -92,6 +98,28 @@ async function explain(
 interface ExplainResult {
   readonly Plan: PlanNode;
   readonly 'Execution Time'?: number;
+}
+
+/**
+ * Which engine is really going to run this.
+ *
+ * pg_duckdb does not fail when DuckDB cannot handle a statement. It emits a WARNING
+ * that no client surfaces, produces an ordinary Postgres plan, and returns the right
+ * answer at ordinary Postgres speed. Measured against this catalogue, three of the
+ * seven queries fall back - all of them because DuckDB has no `to_char` - and without
+ * this check lane F would report those three as pg_duckdb results.
+ *
+ * A plain EXPLAIN, not EXPLAIN ANALYZE: the plan is all that is being read, and this
+ * runs outside the timed loop.
+ */
+async function detectExecutor(
+  client: pg.Client,
+  sql: string,
+  params: readonly QueryValue[],
+): Promise<Pick<QueryMetrics, 'executedBy'>> {
+  const explained = await client.query<{ 'QUERY PLAN': string }>(`EXPLAIN ${sql}`, [...params]);
+  const plan = explained.rows.map((row) => row['QUERY PLAN']).join('\n');
+  return { executedBy: plan.includes('DuckDBScan') ? 'DuckDB' : 'Postgres (DuckDB declined)' };
 }
 
 interface PlanNode {
