@@ -10,6 +10,7 @@
 -- It still lives in data/olap.duckdb, which is what the layout study reads.
 DROP TABLE IF EXISTS orders;
 
+DROP TABLE IF EXISTS fact_inventory_snapshot;
 DROP TABLE IF EXISTS fact_order_item;
 DROP TABLE IF EXISTS dim_customer;
 DROP TABLE IF EXISTS dim_product;
@@ -60,4 +61,13 @@ CREATE TABLE fact_order_item (
   discount_amount NUMERIC(12,2) NOT NULL,
   revenue         NUMERIC(12,2) NOT NULL,
   cost            NUMERIC(12,2) NOT NULL
+);
+
+-- See 03_star.duckdb.sql for what "semi-additive" means and why this is a window.
+CREATE TABLE fact_inventory_snapshot (
+  date_key    INTEGER NOT NULL REFERENCES dim_date (date_key),
+  product_key BIGINT  NOT NULL REFERENCES dim_product (product_key),
+  on_hand     INTEGER NOT NULL,
+  on_order    INTEGER NOT NULL,
+  PRIMARY KEY (date_key, product_key)
 );

@@ -79,11 +79,39 @@ console.log(`
   the only safe way to carry a ratio into a fact table - by not carrying it.`);
 
 // ---------------------------------------------------------------------------
-console.log('\nSEMI-ADDITIVE: nothing here yet\n');
-console.log(`  A stock level can be summed across products and not across days: adding
-  Monday's on-hand to Tuesday's counts the same physical items twice. There is no such
-  measure in this schema, so the class stays a definition until Day 7 adds
-  fact_inventory_snapshot.`);
+console.log('\nSEMI-ADDITIVE: on_hand adds across products, never across days\n');
+
+const stock = await duck.runAndReadAll(`
+  WITH latest AS (SELECT max(date_key) AS date_key FROM fact_inventory_snapshot)
+  SELECT (SELECT count(DISTINCT date_key) FROM fact_inventory_snapshot)  AS days,
+         (SELECT sum(on_hand) FROM fact_inventory_snapshot s
+           JOIN latest l ON l.date_key = s.date_key)                     AS units_today,
+         (SELECT sum(on_hand) FROM fact_inventory_snapshot)              AS units_summed,
+         (SELECT avg(daily) FROM (
+            SELECT sum(on_hand) AS daily FROM fact_inventory_snapshot GROUP BY date_key
+          ))                                                             AS units_average
+`);
+const inventory = stock.getRowObjectsJson()[0] as Record<string, string>;
+const days = Number(inventory['days']);
+
+console.log(`  ${formatCount(days)} daily snapshots of every product`);
+console.log(`  stock on hand today                              ${formatCount(Number(inventory['units_today'])).padStart(16)}`);
+console.log(`  sum(on_hand) across all days                     ${formatCount(Number(inventory['units_summed'])).padStart(16)}`);
+console.log(`  average daily stock                              ${formatCount(Math.round(Number(inventory['units_average']))).padStart(16)}`);
+console.log(`
+  The middle number is ${days} times too large and describes nothing. There are not
+  ${formatCount(Number(inventory['units_summed']))} units anywhere; there are about
+  ${formatCount(Number(inventory['units_today']))}, counted again on each of ${days} days.
+
+  This is the class that catches people, because it is fine right up until the moment
+  somebody widens the date range. Sum on_hand across products and you get the stock in
+  the warehouse. Sum it across two days and you have counted the same physical boxes
+  twice. The measure is additive across every dimension except time.
+
+  The safe aggregations across time are the ones that pick a point or a level rather
+  than a total: the closing balance, the average, the minimum. Revenue has no such
+  restriction because revenue is an event, and events do not persist into the next day
+  waiting to be counted again.`);
 
 // ---------------------------------------------------------------------------
 console.log('\nEXACT VS APPROXIMATE DISTINCT\n');

@@ -27,6 +27,7 @@ you can re-run it.
 | Star schema and grain | `src/data/star.ts` | the range join returns exactly as many rows as it consumed |
 | Surrogate keys and SCD Type 2 | `tests/integration/star.test.ts` | revenue by segment differs depending on which join you use |
 | Additive / non-additive | `pnpm measures` | `sum(revenue)` is one number five ways; `sum(unit_price)` is none |
+| Semi-additive | `fact_inventory_snapshot` | 2,445,331 units on hand; 227,297,811 if you sum across 90 days |
 | Exact vs approximate distinct | `pnpm measures` | 12-25% error for 1.3-2.9x. Answer: exact |
 | Window functions and a date spine | Q4 | `dim_date` supplies the days on which nothing was sold |
 | Vectorised vs tuple-at-a-time | lanes D and E, same tab | 5x to 14x, and E wins the point lookup by 44x |

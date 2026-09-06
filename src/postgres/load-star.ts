@@ -47,6 +47,7 @@ export async function loadStar(
     // `month` exists only in the lake copy, as its Hive partition key. The heap has
     // no partitions, so storing it would be megabytes of redundant text.
     await duck.run(`INSERT INTO ${alias}.fact_order_item SELECT * EXCLUDE (month) FROM fact_order_item`);
+    await duck.run(`INSERT INTO ${alias}.fact_inventory_snapshot SELECT * FROM fact_inventory_snapshot`);
   } finally {
     await duck.run(`DETACH ${alias}`);
   }

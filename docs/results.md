@@ -483,6 +483,28 @@ parameter and is much coarser than the name suggests.
 at a hundred times the data - the exact count's sort grows and HLL's registers do not
 - but that is a decision to make against a measurement at that size, not this one.
 
+### Semi-additive: the class that is fine until somebody widens the date range
+
+`fact_inventory_snapshot` holds one row per product per day for 90 days - 450,000 rows
+of stock levels, which is a *state* rather than an event.
+
+| | Units |
+| --- | ---: |
+| stock on hand today | **2,445,331** |
+| `sum(on_hand)` across all 90 days | **227,297,811** |
+| average daily stock | 2,525,531 |
+
+The middle number is 93x too large and describes nothing. There are not 227 million
+units anywhere; there are about 2.4 million, counted again on each of 90 days.
+
+`on_hand` is additive across every dimension **except time**. Sum it across products
+and you get the stock in the warehouse; sum it across two days and you have counted the
+same physical boxes twice. Revenue has no such restriction, because revenue is an event
+and events do not persist into the next day waiting to be counted again.
+
+The safe aggregations over time are the ones that pick a point or a level rather than a
+total: closing balance, average, minimum.
+
 ### Additive, non-additive, and the column that looks fine
 
 `sum(revenue)` grouped five different ways gives one number, to the cent:
@@ -896,5 +918,37 @@ Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000
 | category_by_month | A  Postgres 18 | 450.78 | 466.17 | 464.64 | 294.13 MB | 2,386,741 | 48 | - |
 | category_by_month | B  DuckDB over Postgres | 482.66 | 702.94 | - | - | 2,376,741 | 48 | - |
 | category_by_month | C  DuckDB over the lake | 31.85 | 34.52 | - | 13.52 MB | 2,376,741 | 48 | 7 |
+
+5 timed runs per cell after 1 warm-up; median and p95, never a mean.
+
+### 2026-09-06 06:17 UTC - 1,000,000 line items
+
+`Apple M5, 10 cores, 16 GB, darwin 25.6.0, node v24.18.0, measured 2026-09-06`
+
+Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000`
+
+| query | lane | median | p95 | engine | bytes read | rows scanned | returned | files |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| revenue_by_category | A  Postgres 18 | 47.55 | 48.75 | 53.20 | 107.84 MB | 1,015,000 | 8 | - |
+| revenue_by_category | B  DuckDB over Postgres | 38.88 | 40.62 | - | - | 1,005,000 | 8 | - |
+| revenue_by_category | C  DuckDB over the lake | 8.692 | 9.322 | - | 3.72 MB | 1,005,000 | 8 | 25 |
+| revenue_by_month_filtered | A  Postgres 18 | 20.27 | 22.07 | 20.59 | 29.84 MB | 237,171 | 6 | - |
+| revenue_by_month_filtered | B  DuckDB over Postgres | 25.53 | 26.06 | - | - | 237,171 | 6 | - |
+| revenue_by_month_filtered | C  DuckDB over the lake | 5.613 | 7.106 | - | 1.01 MB | 237,171 | 6 | 6 |
+| order_lookup | A  Postgres 18 | 0.237 | 0.261 | 0.007 | 32.0 KB | 3 | 3 | - |
+| order_lookup | B  DuckDB over Postgres | 3.672 | 4.089 | - | - | 3 | 3 | - |
+| order_lookup | C  DuckDB over the lake | 4.748 | 5.715 | - | 580.4 KB | 3 | 3 | 1 |
+| top_categories | A  Postgres 18 | 120.46 | 124.73 | 125.56 | 29.85 MB | 242,171 | 5 | - |
+| top_categories | B  DuckDB over Postgres | 28.44 | 33.56 | - | - | 242,171 | 5 | - |
+| top_categories | C  DuckDB over the lake | 11.98 | 12.49 | - | 1.60 MB | 242,171 | 5 | 7 |
+| rolling_revenue | A  Postgres 18 | 27.00 | 28.01 | 29.36 | 29.46 MB | 237,355 | 184 | - |
+| rolling_revenue | B  DuckDB over Postgres | 22.57 | 30.21 | - | - | 237,355 | 184 | - |
+| rolling_revenue | C  DuckDB over the lake | 10.75 | 10.87 | - | 1.01 MB | 237,355 | 184 | 7 |
+| repeat_rate | A  Postgres 18 | 153.50 | 156.12 | 166.07 | 53.22 MB | 477,267 | 6 | - |
+| repeat_rate | B  DuckDB over Postgres | 54.70 | 59.42 | - | - | 477,267 | 6 | - |
+| repeat_rate | C  DuckDB over the lake | 15.66 | 16.59 | - | 1.68 MB | 477,265 | 6 | 7 |
+| category_by_month | A  Postgres 18 | 26.52 | 27.21 | 27.87 | 31.18 MB | 252,171 | 48 | - |
+| category_by_month | B  DuckDB over Postgres | 30.62 | 33.13 | - | - | 242,171 | 48 | - |
+| category_by_month | C  DuckDB over the lake | 9.955 | 10.31 | - | 1.49 MB | 242,171 | 48 | 7 |
 
 5 timed runs per cell after 1 warm-up; median and p95, never a mean.

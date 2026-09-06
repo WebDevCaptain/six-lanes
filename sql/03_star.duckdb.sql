@@ -59,3 +59,21 @@ CREATE OR REPLACE TABLE fact_order_item (
   cost            DECIMAL(12,2) NOT NULL,  -- additive
   month           VARCHAR       NOT NULL   -- Hive partition key for the lake
 );
+
+-- Day 7: the semi-additive measure.
+--
+-- Grain: one row per product per day. `on_hand` can be summed across products - the
+-- total stock on a given day is a real quantity - and must never be summed across
+-- days, because Monday's stock and Tuesday's stock are largely the same physical
+-- items. That is what "semi-additive" means, and it is the only class of measure the
+-- other tables cannot demonstrate.
+--
+-- A rolling window rather than all 730 days, which is also what real warehouses do:
+-- snapshots are the fastest-growing table in any schema, 5,000 products x 730 days is
+-- more rows than the fact table, and nobody keeps daily stock levels forever.
+CREATE OR REPLACE TABLE fact_inventory_snapshot (
+  date_key    INTEGER NOT NULL,   -- FK to dim_date
+  product_key BIGINT  NOT NULL,   -- FK to dim_product
+  on_hand     INTEGER NOT NULL,   -- SEMI-ADDITIVE: across products yes, across days no
+  on_order    INTEGER NOT NULL    -- semi-additive, same rule
+);

@@ -53,6 +53,7 @@ console.log(`  dim_date      ${star.dates.toLocaleString()} days`);
 console.log(`  dim_customer  ${star.customerVersions.toLocaleString()} versions of ${star.customers.toLocaleString()} customers (SCD2)`);
 console.log(`  dim_product   ${star.products.toLocaleString()} products`);
 console.log(`  fact          ${star.facts.toLocaleString()} line items`);
+console.log(`  inventory     ${star.inventorySnapshots.toLocaleString()} daily snapshots (semi-additive)`);
 console.log(`\nwrote ${PATHS.database}`);
 
 function elapsed(): string {

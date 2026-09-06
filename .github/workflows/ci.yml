@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The whole pipeline, on a smaller dataset. The point is not to publish timings from a
+# shared CI runner - those would be noise - but to prove that every claim the
+# repository makes still holds: the lanes agree, the SCD2 invariants hold, pruning
+# still prunes, and the slice still fits its budget.
+env:
+  OLAP_ROWS: '200000'
+  OLAP_SLICE_ROWS: '60000'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Cheap and independent of any service: fail here before spending on containers.
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Start Postgres and the lake host
+        run: pnpm up
+
+      - name: Build the dataset and every store the lanes read
+        run: |
+          pnpm generate
+          pnpm load
+          pnpm ducklake
+          pnpm slice
+
+      # The gate: every lane must return identical rows, or this exits non-zero.
+      - run: pnpm compare
+      - run: pnpm test:integration
+
+      - name: Build the app
+        run: pnpm build
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --tail 100

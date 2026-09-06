@@ -151,6 +151,31 @@ describe('measure classes', () => {
     }
   });
 
+  it('keeps on_hand additive across products but not across days', async () => {
+    // The semi-additive class. Summing a stock level across two days counts the same
+    // physical units twice, and the arithmetic gives no hint that anything is wrong.
+    const days = Number(await scalar('SELECT count(DISTINCT date_key) FROM fact_inventory_snapshot'));
+    const today = Number(await scalar(`
+      SELECT sum(on_hand) FROM fact_inventory_snapshot
+      WHERE date_key = (SELECT max(date_key) FROM fact_inventory_snapshot)
+    `));
+    const everyDay = Number(await scalar('SELECT sum(on_hand) FROM fact_inventory_snapshot'));
+
+    expect(days).toBeGreaterThan(1);
+    expect(today).toBeGreaterThan(0);
+    // Roughly `days` times too large - which is exactly the failure mode, and the
+    // reason a warehouse marks the column rather than trusting people to remember.
+    expect(everyDay / today).toBeGreaterThan(days * 0.5);
+  });
+
+  it('snapshots every product on every day in its window', async () => {
+    expect(await scalar(`
+      SELECT count(*) FROM (
+        SELECT date_key, count(*) AS n FROM fact_inventory_snapshot GROUP BY date_key
+      ) s WHERE n <> (SELECT count(*) FROM dim_product)
+    `)).toBe('0');
+  });
+
   it('produces a meaningless number when unit_price is summed, as documented', async () => {
     // Not a bug to fix, a class of column to know about. sum(unit_price) is a
     // perfectly valid SQL expression that answers no question anyone has.

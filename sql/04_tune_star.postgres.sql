@@ -29,6 +29,7 @@ CREATE STATISTICS fact_month_expr
   ON (to_char(order_ts AT TIME ZONE 'UTC', 'YYYY-MM'))
   FROM fact_order_item;
 
+ANALYZE fact_inventory_snapshot;
 ANALYZE dim_date;
 ANALYZE dim_customer;
 ANALYZE dim_product;
