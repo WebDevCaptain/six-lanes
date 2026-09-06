@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-09-06T06:17:14.554Z",
+  "measuredAt": "2026-09-06T06:24:31.677Z",
   "host": {
     "cpu": "Apple M5",
     "cores": 10,
@@ -82,14 +82,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 43.915125000000046,
-        "p95Ms": 45.400709000000006,
+        "warmMs": 41.94404200000008,
+        "p95Ms": 42.73645899999997,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 113074176,
         "rowsScanned": 1015000,
-        "engineMs": 47.984,
+        "engineMs": 45.171,
         "rowsReturned": 8
       },
       "sql": "SELECT p.category,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nGROUP BY p.category\nORDER BY revenue DESC, p.category"
@@ -100,8 +100,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 44.87295900000004,
-        "p95Ms": 227.985,
+        "warmMs": 38.93537500000002,
+        "p95Ms": 42.678583,
         "runs": 5
       },
       "metrics": {
@@ -121,12 +121,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 8.873209000000088,
-        "p95Ms": 9.156124999999975,
+        "warmMs": 9.272874999999885,
+        "p95Ms": 10.692332999999962,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 3901860,
+        "bytesRead": 3902552,
         "rowsScanned": 1005000,
         "columnsProjected": [
           "category",
@@ -144,8 +144,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 68.12424999999985,
-        "p95Ms": 74.92849999999999,
+        "warmMs": 69.36774999999989,
+        "p95Ms": 76.74654199999986,
         "runs": 5
       },
       "metrics": {
@@ -160,14 +160,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 20.582750000000033,
-        "p95Ms": 20.99895800000013,
+        "warmMs": 21.17904199999998,
+        "p95Ms": 22.24479099999985,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 31293440,
+        "bytesRead": 31268864,
         "rowsScanned": 237171,
-        "engineMs": 20.421,
+        "engineMs": 19.202,
         "rowsReturned": 6
       },
       "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month\nORDER BY month"
@@ -178,8 +178,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 24.972999999999956,
-        "p95Ms": 26.2153330000001,
+        "warmMs": 22.504834000000074,
+        "p95Ms": 24.724749999999858,
         "runs": 5
       },
       "metrics": {
@@ -199,12 +199,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 6.456457999999884,
-        "p95Ms": 6.984959000000117,
+        "warmMs": 6.700874999999996,
+        "p95Ms": 7.093416000000161,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 1056415,
+        "bytesRead": 1056448,
         "rowsScanned": 237171,
         "columnsProjected": [
           "month",
@@ -222,8 +222,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 19.9192079999998,
-        "p95Ms": 20.7604580000002,
+        "warmMs": 20.148500000000013,
+        "p95Ms": 20.54745899999989,
         "runs": 5
       },
       "metrics": {
@@ -238,8 +238,8 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 0.2707919999998012,
-        "p95Ms": 0.33808399999998073,
+        "warmMs": 0.27708300000017516,
+        "p95Ms": 0.28779099999997015,
         "runs": 5
       },
       "metrics": {
@@ -256,8 +256,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 3.529750000000149,
-        "p95Ms": 3.6472499999999854,
+        "warmMs": 3.4865409999999883,
+        "p95Ms": 3.8904159999999592,
         "runs": 5
       },
       "metrics": {
@@ -287,8 +287,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 5.472582999999759,
-        "p95Ms": 5.566417000000001,
+        "warmMs": 5.462750000000142,
+        "p95Ms": 5.6902500000001055,
         "runs": 5
       },
       "metrics": {
@@ -320,8 +320,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 2.886500000000069,
-        "p95Ms": 3.895292000000154,
+        "warmMs": 2.937582999999904,
+        "p95Ms": 4.648749999999836,
         "runs": 5
       },
       "metrics": {
@@ -336,14 +336,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 121.29220799999985,
-        "p95Ms": 126.22054200000002,
+        "warmMs": 120.90820900000017,
+        "p95Ms": 123.86779100000012,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 31301632,
+        "bytesRead": 31277056,
         "rowsScanned": 242171,
-        "engineMs": 131.322,
+        "engineMs": 126.161,
         "rowsReturned": 5
       },
       "sql": "SELECT p.category,\n       sum(f.revenue)          AS revenue,\n       count(DISTINCT f.order_id) AS orders\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY p.category\nORDER BY revenue DESC, p.category\nLIMIT $3"
@@ -354,8 +354,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 28.827041999999892,
-        "p95Ms": 36.49787500000002,
+        "warmMs": 28.81770800000004,
+        "p95Ms": 32.88974999999982,
         "runs": 5
       },
       "metrics": {
@@ -378,12 +378,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 11.294167000000016,
-        "p95Ms": 11.676792000000205,
+        "warmMs": 11.972374999999829,
+        "p95Ms": 13.22250000000031,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 1672921,
+        "bytesRead": 1672928,
         "rowsScanned": 242171,
         "columnsProjected": [
           "category",
@@ -403,8 +403,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 30.036708999999973,
-        "p95Ms": 33.95550000000003,
+        "warmMs": 36.6740420000001,
+        "p95Ms": 39.59762499999988,
         "runs": 5
       },
       "metrics": {
@@ -419,14 +419,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 26.575874999999996,
-        "p95Ms": 27.017209000000094,
+        "warmMs": 28.025624999999764,
+        "p95Ms": 28.858749999999873,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 30892032,
+        "bytesRead": 30867456,
         "rowsScanned": 237355,
-        "engineMs": 29.45,
+        "engineMs": 28.926,
         "rowsReturned": 184
       },
       "sql": "WITH daily AS (\n  SELECT d.date_key,\n         coalesce(sum(f.revenue), 0) AS revenue\n  FROM dim_date d\n  LEFT JOIN fact_order_item f\n    ON f.date_key = d.date_key\n   AND f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  WHERE d.date >= ($1::timestamptz AT TIME ZONE 'UTC')::date\n    AND d.date <  ($2::timestamptz AT TIME ZONE 'UTC')::date\n  GROUP BY d.date_key\n)\nSELECT date_key,\n       revenue,\n       sum(revenue) OVER (ORDER BY date_key ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS rolling_30d\nFROM daily\nORDER BY date_key"
@@ -437,8 +437,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 24.781333999999788,
-        "p95Ms": 29.337208999999802,
+        "warmMs": 25.148541999999907,
+        "p95Ms": 30.059833000000253,
         "runs": 5
       },
       "metrics": {
@@ -460,12 +460,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 9.086416999999983,
-        "p95Ms": 10.198707999999897,
+        "warmMs": 9.851791999999932,
+        "p95Ms": 10.197707999999693,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 1063872,
+        "bytesRead": 1063909,
         "rowsScanned": 237355,
         "columnsProjected": [
           "_",
@@ -490,8 +490,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 27.654249999999593,
-        "p95Ms": 28.082374999999956,
+        "warmMs": 27.963958000000275,
+        "p95Ms": 28.93512499999997,
         "runs": 5
       },
       "metrics": {
@@ -506,14 +506,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 153.00329199999942,
-        "p95Ms": 158.0757079999994,
+        "warmMs": 148.02870800000073,
+        "p95Ms": 153.48566699999992,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 55803904,
+        "bytesRead": 55779328,
         "rowsScanned": 477267,
-        "engineMs": 161.123,
+        "engineMs": 154.9,
         "rowsReturned": 6
       },
       "sql": "WITH per_customer AS (\n  SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM')      AS month,\n         c.customer_id,\n         count(DISTINCT f.order_id)   AS orders\n  FROM fact_order_item f\n  JOIN dim_customer c ON c.customer_key = f.customer_key\n  WHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  GROUP BY month, c.customer_id\n)\nSELECT month,\n       count(*)                                             AS customers,\n       count(*) FILTER (WHERE orders > 1)                   AS repeat_customers,\n       round(100.0 * count(*) FILTER (WHERE orders > 1) / count(*), 2) AS repeat_rate_pct\nFROM per_customer\nGROUP BY month\nORDER BY month"
@@ -524,8 +524,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 52.700292000000445,
-        "p95Ms": 58.59450000000015,
+        "warmMs": 58.52991699999984,
+        "p95Ms": 63.95824999999968,
         "runs": 5
       },
       "metrics": {
@@ -547,12 +547,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 14.405958000000282,
-        "p95Ms": 15.001125000000684,
+        "warmMs": 14.191458000000239,
+        "p95Ms": 15.68487500000083,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 1760844,
+        "bytesRead": 1760810,
         "rowsScanned": 477265,
         "columnsProjected": [
           "customer_id",
@@ -572,8 +572,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 178.9253749999998,
-        "p95Ms": 215.54166600000008,
+        "warmMs": 169.58837500000027,
+        "p95Ms": 170.90200000000004,
         "runs": 5
       },
       "metrics": {
@@ -588,14 +588,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 28.671917000000576,
-        "p95Ms": 32.805209000000104,
+        "warmMs": 25.462875000000167,
+        "p95Ms": 27.068707999999788,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 32694272,
+        "bytesRead": 32669696,
         "rowsScanned": 252171,
-        "engineMs": 26.736,
+        "engineMs": 27.105,
         "rowsReturned": 48
       },
       "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       p.category,\n       sum(f.revenue)  AS revenue,\n       sum(f.quantity) AS units\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month, p.category\nORDER BY month, p.category"
@@ -606,8 +606,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 31.36975000000075,
-        "p95Ms": 34.19737500000065,
+        "warmMs": 29.048416999999972,
+        "p95Ms": 34.53108400000019,
         "runs": 5
       },
       "metrics": {
@@ -630,12 +630,12 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 8.784374999999272,
-        "p95Ms": 9.216292000000067,
+        "warmMs": 9.848125000000437,
+        "p95Ms": 10.319499999999607,
         "runs": 5
       },
       "metrics": {
-        "bytesRead": 1565004,
+        "bytesRead": 1565072,
         "rowsScanned": 242171,
         "columnsProjected": [
           "category",
@@ -656,8 +656,8 @@
       "laneId": "pg-duckdb",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 26.81195900000057,
-        "p95Ms": 27.186999999999898,
+        "warmMs": 26.15124999999989,
+        "p95Ms": 27.24958400000014,
         "runs": 5
       },
       "metrics": {
