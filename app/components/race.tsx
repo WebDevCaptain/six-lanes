@@ -3,12 +3,13 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { findMismatches } from '@/bench/compare';
+import type { MeasuredRow } from '@/bench/run-catalogue';
 import type { BrowserLane } from '@/browser/duckdb-wasm';
 import type { Preparation, SliceManifest } from '@/browser/slice';
 import type { LaneMeta } from '@/lanes/meta';
 import { LANE_ORDER } from '@/lanes/meta';
 import { DEFAULT_PARAMS, type QueryId } from '@/queries/index';
-import type { LaneId, LaneResult, Row } from '@/types';
+import type { LaneId, Row } from '@/types';
 import { LaneTrack } from './lane-track';
 import { formatBytes, formatMs } from './format';
 
@@ -26,11 +27,7 @@ interface RaceProps {
 }
 
 /** A lane's result plus whether it is allowed to be believed. */
-export interface Finished {
-  readonly result: LaneResult;
-  readonly agrees: boolean;
-  readonly disagreement?: string;
-}
+export type Finished = MeasuredRow;
 
 export function Race({ questions, lanes, slice, host }: RaceProps) {
   const [selected, setSelected] = useState<QueryId>(questions[0]!.id);
@@ -61,13 +58,9 @@ export function Race({ questions, lanes, slice, host }: RaceProps) {
   const disagreeing = ordered.filter((entry) => !entry.agrees);
 
   /**
-   * Two engines that both return nothing agree perfectly and prove nothing.
-   *
-   * This happened for real: the browser slice was cut from the end of the dataset
-   * while the questions ask about a window in the middle, so lanes D and E answered
-   * every range query with an empty result and the page called it success. The slice
-   * is now cut from inside the window, and this notices if that ever stops being
-   * true.
+   * Two engines that both return nothing agree perfectly and prove nothing. It has
+   * happened: a slice cut from the wrong end of the dataset held no rows for the
+   * questions, and the page called that success.
    */
   const serverAnswered = ordered.some(
     (entry) => BROWSER_LANES.indexOf(entry.result.laneId) === -1 && entry.result.rows.length > 0,
@@ -219,15 +212,7 @@ async function runServerLanes(queryId: QueryId): Promise<Finished[]> {
   });
   if (!response.ok) throw new Error(`the server could not run this question (${response.status})`);
 
-  const body = (await response.json()) as {
-    results: LaneResult[];
-    mismatches: { laneId: string; detail: string }[];
-  };
-
-  return body.results.map((result) => {
-    const mismatch = body.mismatches.find((entry) => entry.laneId === result.laneId);
-    return mismatch ? { result, agrees: false, disagreement: mismatch.detail } : { result, agrees: true };
-  });
+  return ((await response.json()) as { rows: Finished[] }).rows;
 }
 
 const BROWSER_LANES: readonly LaneId[] = ['duckdb-wasm', 'pglite'];
@@ -281,12 +266,9 @@ function useBrowserLanes(slice: SliceManifest | null): BrowserLanes {
       const finished: Finished[] = [];
       for (const lane of lanes) {
         const result = await lane.run(queryId, DEFAULT_PARAMS);
-        // Checked against the slice, not against lane A: lane A answers over the
-        // whole dataset and these two hold a slice of it.
+        // Against the slice, not lane A, which answers over the whole dataset.
         const [mismatch] = findMismatches({ ...result, rows: expected }, [result]);
-        finished.push(
-          mismatch ? { result, agrees: false, disagreement: mismatch.detail } : { result, agrees: true },
-        );
+        finished.push({ queryId, result, agrees: !mismatch, disagreement: mismatch?.detail });
       }
       return finished;
     },

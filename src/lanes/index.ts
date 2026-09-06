@@ -26,8 +26,7 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       label: LANE_META['duckdb-postgres'].label,
       handicaps: LANE_META['duckdb-postgres'].handicaps,
       extensions: ['postgres'],
-      // READ_ONLY makes the intent explicit: this lane is a reader of somebody
-      // else's transactional database and has no business writing to it.
+      // READ_ONLY: this lane reads somebody else's transactional database.
       setup: [`ATTACH '${toLibpqConnectionString(POSTGRES_URL)}' AS pg (TYPE postgres, READ_ONLY)`],
       schema: 'pg.',
       partitioned: false,
@@ -35,18 +34,12 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
     }),
 
   /**
-   * Lane C reads generation 2, through the DuckLake catalog.
+   * Lane C reads through the DuckLake catalog: metadata from Postgres, Parquet over
+   * HTTP with an overridden DATA_PATH. That split is what a deployment uses, and it
+   * needs no rewriting because DuckLake stores file paths relative to DATA_PATH.
    *
-   * The catalog lives in Postgres and the data is fetched over HTTP with an
-   * overridden DATA_PATH - the same split a deployment uses, where the catalog is a
-   * managed database and the Parquet sits on a CDN. Nothing was rewritten to make
-   * that work: DuckLake stores its file paths relative to DATA_PATH, so re-pointing
-   * is a connection string change.
-   *
-   * Note what is gone compared with generation 1: no directory walk, no explicit
-   * list of two dozen URLs, no view to hide them behind. `FROM lake.fact_order_item`
-   * is the whole thing, and the file list comes from one transactional metadata
-   * query.
+   * Gone since generation 1: the directory walk, the inlined URL list, and the view
+   * hiding them. The file list is now one transactional metadata query.
    */
   'duckdb-lake': () =>
     createDuckDBLane({
@@ -87,13 +80,14 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       handicaps: LANE_META['pg-duckdb'].handicaps,
       sessionSetup: [
         `CREATE EXTENSION IF NOT EXISTS pg_duckdb`,
-        // Without this, pg_duckdb only takes over queries it is confident about, and
-        // the lane would silently be measuring plain Postgres on some questions.
+        // Without this pg_duckdb only takes queries it is confident about.
         `SET duckdb.force_execution = true`,
       ],
-      // The plan under this setting is DuckDB's. Postgres' buffer counters describe
-      // a heap access method that is not the one doing the work, so reporting them
-      // would attach a real-looking number to the wrong thing.
+      /*
+       * The plan here is DuckDB's, so Postgres' buffer counters describe an access
+       * method that is not doing the work. Reporting them would put a real-looking
+       * number against the wrong thing.
+       */
       reportBuffers: false,
       detectExecutor: true,
     }),
@@ -105,14 +99,22 @@ export async function openLane(id: LaneId): Promise<Lane> {
   return factory();
 }
 
-/** Opens the given lanes and drops any that cannot answer, e.g. an unloaded store. */
+/**
+ * Opens the given lanes and drops any that cannot answer.
+ *
+ * Settled rather than all: lane F's container is optional and Postgres may simply be
+ * down, and one refused connection should skip a lane rather than abort the command
+ * with a socket error. Lanes that did open are closed either way, so a partial
+ * failure does not leak the connections its siblings acquired.
+ */
 export async function openAvailableLanes(ids: readonly LaneId[]): Promise<Lane[]> {
-  const lanes = await Promise.all(ids.map((id) => openLane(id)));
+  const opened = await Promise.allSettled(ids.map((id) => openLane(id)));
   const usable: Lane[] = [];
 
-  for (const lane of lanes) {
-    if (await lane.available()) usable.push(lane);
-    else await lane.close();
+  for (const outcome of opened) {
+    if (outcome.status === 'rejected') continue;
+    if (await outcome.value.available()) usable.push(outcome.value);
+    else await outcome.value.close().catch(() => undefined);
   }
   return usable;
 }

@@ -10,11 +10,9 @@ import type { QueryDef, QueryParams } from './types';
 /**
  * The query catalogue: one logical question, one definition, every dialect.
  *
- * This is TypeScript rather than the `.sql` files the plan sketched, for one reason
- * that overrides the rest: lanes D and E run inside a browser tab, where there is no
- * filesystem to read a `.sql` file from. A catalogue only the server can load is not
- * a shared catalogue, and "the same query on every engine" is the claim the whole
- * project rests on.
+ * TypeScript rather than `.sql` files because lanes D and E run in a browser tab,
+ * where there is no filesystem. A catalogue only the server can load would not
+ * support the claim that every engine runs the same query.
  */
 export const QUERIES = {
   revenue_by_category: q1RevenueByCategory,
@@ -35,13 +33,10 @@ export function getQuery(id: QueryId): QueryDef {
 }
 
 /**
- * The parameters every lane is measured with.
- *
- * Fixed rather than random, so two runs a week apart are comparable. A six-month
- * window in the middle of the dataset, so there are files to prune on both sides.
- *
- * `limit` is 5 against eight categories: a LIMIT that never limits demonstrates
- * nothing about what a LIMIT costs.
+ * The parameters every lane is measured with. Fixed rather than random so two runs a
+ * week apart are comparable, and a six-month window mid-dataset so there are files to
+ * prune on both sides. `limit` is 5 against eight categories, since a LIMIT that
+ * never limits demonstrates nothing.
  */
 export const DEFAULT_PARAMS: QueryParams = {
   from: '2025-03-01T00:00:00Z',

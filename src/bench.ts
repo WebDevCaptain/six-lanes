@@ -1,35 +1,25 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { findMismatches } from './bench/compare';
-import { formatBytes, formatCount, formatMs, renderTable, type Column } from './bench/table';
 import { BENCH } from './bench/measure';
+import { disagreements, runCatalogue, type MeasuredRow } from './bench/run-catalogue';
+import { formatBytes, formatCount, formatMs, renderTable, type Column } from './bench/table';
 import { DATASET, PATHS } from './config';
 import { hostSpec, describeHost, type HostSpec } from './host';
-import { BASELINE_LANE, LANE_META, openAvailableLanes } from './lanes/index';
-import { DEFAULT_PARAMS, QUERY_IDS, getQuery, type QueryId } from './queries/index';
-import type { LaneId, LaneResult } from './types';
+import { LANE_META, openAvailableLanes } from './lanes/index';
+import { DEFAULT_PARAMS, getQuery } from './queries/index';
+import type { LaneId } from './types';
 
 /**
- * `pnpm bench` - every server lane, one machine, one dataset, written to disk.
+ * `pnpm bench` - every server lane on one machine and one dataset, committed to
+ * bench/results/ so any published number traces back to the run that produced it.
  *
- * `pnpm compare` is the loop you run while working. This is the artefact: it includes
- * lane F, which cannot be deployed anywhere, and it commits its output to
- * bench/results/ so a number on the site can always be traced back to the run that
- * produced it and the machine that ran it.
- *
- * Lanes D and E are absent because they need a browser. Their numbers come from the
- * page itself, where the honest thing to measure is what a visitor experiences.
+ * Unlike `pnpm compare` this includes lane F, which cannot be deployed. Lanes D and E
+ * are absent because they need a browser.
  */
 const LANES: readonly LaneId[] = ['postgres', 'duckdb-postgres', 'duckdb-lake', 'pg-duckdb'];
 
-interface BenchRow {
-  readonly queryId: QueryId;
-  readonly result: LaneResult;
-  readonly agrees: boolean;
-}
-
-const COLUMNS: readonly Column<BenchRow>[] = [
+const COLUMNS: readonly Column<MeasuredRow>[] = [
   { header: 'query', value: ({ queryId }) => queryId },
   {
     header: 'lane',
@@ -59,23 +49,12 @@ if (missing.length > 0) {
   console.log('');
 }
 
-const rows: BenchRow[] = [];
-for (const queryId of QUERY_IDS) {
-  const results: LaneResult[] = [];
-  for (const lane of lanes) results.push(await lane.run(queryId, DEFAULT_PARAMS));
-
-  const baseline = results.find((result) => result.laneId === BASELINE_LANE)!;
-  const disagreed = new Set(
-    findMismatches(baseline, results.filter((result) => result !== baseline)).map((m) => m.laneId),
-  );
-  rows.push(...results.map((result) => ({ queryId, result, agrees: !disagreed.has(result.laneId) })));
-}
-
+const rows = await runCatalogue(lanes, DEFAULT_PARAMS);
 for (const lane of lanes) await lane.close();
 
 console.log(renderTable(COLUMNS, rows));
 
-const failures = rows.filter((row) => !row.agrees);
+const failed = disagreements(rows);
 const record = {
   measuredAt: new Date().toISOString(),
   host,
@@ -105,8 +84,11 @@ writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
 console.log(`\n${DATASET.orderItems.toLocaleString('en-US')} line items, ${BENCH.timedRuns} timed runs per cell after ${BENCH.warmupRuns} warm-up.`);
 console.log(`wrote ${file}`);
 
-if (failures.length > 0) {
-  console.error(`\n${failures.length} lane/query pair(s) disagreed with lane A; their timings are withheld.`);
+if (failed.length > 0) {
+  console.error(`\n${failed.length} lane/query pair(s) disagreed with lane A; their timings are withheld.`);
+  for (const row of failed) {
+    console.error(`  ${row.queryId} / lane ${LANE_META[row.result.laneId].letter}: ${row.disagreement}`);
+  }
   process.exitCode = 1;
 }
 

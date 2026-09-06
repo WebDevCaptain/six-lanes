@@ -13,25 +13,12 @@ import { TABLES } from './queries/dialect';
 import { readSqlFile } from './sql-files';
 
 /**
- * `pnpm slice` - builds the two artefacts the browser downloads.
+ * `pnpm slice` - builds what the browser downloads into public/slice: partitioned
+ * Parquet for lane D, a Postgres data directory for lane E, and a manifest of both.
  *
- *   app/public/slice/parquet/       lane D reads this with DuckDB-WASM over HTTP
- *   app/public/slice/pglite.tar.gz  lane E loads this as a Postgres data directory
- *   app/public/slice/manifest.json  what is in them, for the UI and for CI
- *
- * Both hold exactly the same rows, which is the whole point: lanes D and E are the
- * cleanest comparison in the project precisely because the only variable left is the
- * engine. Same tab, same CPU, same rows.
- *
- * The row count is not a constant in this file. It is whatever fits the download
- * budget, found by building and measuring - because the budget is the real
- * constraint and the row count is just how it happens to express itself at this
- * scale. It is written to the manifest and displayed on screen.
- *
- * The manifest is not the `manifest.json` Day 3 argued against. That one was a
- * hand-maintained substitute for a catalog. This one is a build artefact describing
- * a published download: produced by the thing that wrote the files, and never
- * consulted to decide what a table contains.
+ * The two hold identical rows, which is what makes lanes D and E a controlled
+ * comparison. The row count is not a constant here; it is whatever fits the download
+ * budget, found by building and measuring.
  */
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
@@ -72,8 +59,10 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
   );
   if (largest <= SLICE.budgetBytes) break;
 
-  // Both artefacts scale close to linearly in rows, so one measurement is enough to
-  // aim the next attempt. 10% of headroom absorbs the part that does not.
+  /*
+   * Both artefacts scale close to linearly in rows, so one measurement is enough to
+   * aim the next attempt. The 10% of headroom absorbs the part that does not.
+   */
   targetRows = Math.floor(targetRows * (SLICE.budgetBytes / largest) * 0.9);
   console.log(`  over the ${formatBytes(SLICE.budgetBytes)} budget, retrying smaller`);
 }
@@ -83,9 +72,9 @@ if (!build || Math.max(build.parquetBytes, build.pgliteBytes) > SLICE.budgetByte
 }
 
 /**
- * Q7 asks for one specific order. If the slice does not contain it, lanes D and E
- * return nothing, the reference returns nothing, and the page reports agreement on a
- * question neither engine answered. Fail the build instead.
+ * Fail rather than ship a slice missing the order Q7 asks for: lanes D and E would
+ * return nothing, the reference would too, and the page would report agreement on a
+ * question neither engine answered.
  */
 const q7Rows = Number(
   await scalar(
@@ -167,10 +156,8 @@ async function buildSlice(maxRows: number): Promise<SliceBuild> {
 }
 
 /**
- * The dimensions are filtered to what the sliced facts actually reference.
- *
- * Shipping all 240,096 customer versions to answer questions about a few months of
- * orders would spend most of the download budget on rows no query can reach.
+ * Dimensions are filtered to what the sliced facts reference. Shipping all 240,096
+ * customer versions would spend most of the budget on rows no query can reach.
  */
 function sliceSources({ fromDateKey, toDateKey }: SliceWindow): Record<string, string> {
   const within = `date_key BETWEEN ${fromDateKey} AND ${toDateKey}`;
@@ -184,18 +171,13 @@ function sliceSources({ fromDateKey, toDateKey }: SliceWindow): Record<string, s
 }
 
 /**
- * The earliest day, inside the window the page asks about, that fits the row target.
+ * The earliest day, inside the window the questions ask about, that fits the row
+ * target.
  *
- * The window matters and was learned the hard way. A slice taken from the end of the
- * dataset held no rows at all for the default date range, so lanes D and E answered
- * every range query with nothing - and agreed perfectly with a reference that also
- * returned nothing. A vacuous pass is worse than a failure, because it looks like
- * success. The slice is now cut from inside the range the questions use.
- *
- * Whole days rather than whole months: a month is 40,000 rows at 1M and 400,000 at
- * 10M, so a month-aligned slice would blow the download budget as soon as the dataset
- * grew. The fact is still written partitioned by month, so lane D prunes files
- * exactly as lane C does - the oldest partition is simply a partial month.
+ * Inside the window because a slice cut from the end of the dataset held no rows for
+ * the default range, so lanes D and E agreed perfectly while both returned nothing.
+ * Whole days rather than whole months because a month is 40,000 rows at 1M and
+ * 400,000 at 10M, which would blow the budget as the dataset grows.
  */
 async function chooseWindow(connection: DuckDBConnection, maxRows: number): Promise<SliceWindow> {
   const inWindow = `order_ts >= TIMESTAMPTZ '${DEFAULT_PARAMS.from}'
@@ -215,16 +197,17 @@ async function chooseWindow(connection: DuckDBConnection, maxRows: number): Prom
     SELECT min(date_key) FROM running WHERE total <= ${maxRows}
   `);
 
-  // A single day over the target leaves nothing selectable; take the last day of the
-  // window anyway and let the budget check decide whether the result is publishable.
+  /*
+   * A single day over the target leaves nothing selectable; take the last day of the
+   * window anyway and let the budget check decide whether the result is publishable.
+   */
   return { fromDateKey: cutoff === null ? toDateKey : Number(cutoff), toDateKey };
 }
 
 async function writeParquet(sources: Record<string, string>): Promise<void> {
   for (const [table, source] of Object.entries(sources)) {
     if (table === TABLES.fact) {
-      // The fact keeps its monthly partitions so lane D prunes in the browser
-      // exactly as lane C does on the server.
+      // Monthly partitions kept so lane D prunes in the browser as lane C does.
       await duck.run(
         `COPY (${source}) TO '${join(PARQUET_DIR, table)}'
          (FORMAT parquet, PARTITION_BY month, COMPRESSION zstd, OVERWRITE_OR_IGNORE)`,
@@ -238,15 +221,11 @@ async function writeParquet(sources: Record<string, string>): Promise<void> {
 }
 
 /**
- * A ready-to-load Postgres data directory.
+ * A ready-to-load Postgres data directory, built here because `COPY` inside PGlite
+ * over a quarter of a million rows takes minutes.
  *
- * Built here rather than in the browser because running `COPY` inside PGlite over a
- * quarter of a million rows takes minutes. `dumpDataDir` here and `loadDataDir`
- * there turns that into one download and a few hundred milliseconds.
- *
- * Lane E gets the same indexes and statistics as lane A. They cost download size,
- * and leaving them out to save it would make lane E a straw man rather than a
- * controlled baseline.
+ * Lane E gets lane A's indexes and statistics. They cost download size, and dropping
+ * them to save it would make lane E a straw man rather than a baseline.
  */
 async function writePgliteDatadir(sources: Record<string, string>): Promise<void> {
   const pglite = new PGlite();

@@ -16,15 +16,11 @@ import { perColumnBytes, type ColumnBytes } from './study/columns';
 import { LAYOUT_VARIANTS, PROBES, writeVariant, type WrittenVariant } from './study/layout';
 
 /**
- * `pnpm study` - the Day 2 layout study.
+ * `pnpm study` - writes the same rows in every layout in {@link LAYOUT_VARIANTS}, then
+ * asks each copy the same four questions. `--write` appends to docs/results.md.
  *
- * Writes the same million rows nine ways, then asks each copy the same four
- * questions and records what the engine had to read to answer them. Add `--write`
- * to append the tables to docs/results.md.
- *
- * Every measurement here runs with DuckDB's caches off, so the numbers are what a
- * cold reader pays. That makes them comparable with each other, which is the only
- * comparison this study is making.
+ * Caches off throughout, so the numbers are what a cold reader pays. That makes them
+ * comparable with each other, which is the only comparison being made.
  */
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);

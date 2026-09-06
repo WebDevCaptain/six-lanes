@@ -6,15 +6,12 @@ import type { BrowserLane } from './duckdb-wasm';
 import { SLICE_BASE, transferred, type Preparation, type SliceManifest } from './slice';
 
 /**
- * Lane E - real Postgres, compiled to WebAssembly, in the tab.
+ * Lane E - real Postgres compiled to WebAssembly, and the controlled half of the
+ * project's cleanest experiment: every variable except storage layout is held
+ * identical to lane D. Same tab, same CPU, same rows, same query.
  *
- * The controlled half of the project's cleanest experiment. Lane A is the real-world
- * Postgres number, measured against a server with parallel workers and 256 MB of
- * shared buffers; lane E is the same engine with every variable except the storage
- * layout held identical to lane D. Same tab, same CPU, same rows, same query.
- *
- * The data directory is downloaded pre-built. Running `COPY` for 160,000 rows inside
- * PGlite takes minutes, which would make the load time the entire measurement.
+ * The data directory arrives pre-built, because `COPY` for 160,000 rows inside PGlite
+ * takes minutes and would become the entire measurement.
  */
 export async function createPGliteLane(manifest: SliceManifest): Promise<BrowserLane> {
   const downloadStartedAt = performance.now();

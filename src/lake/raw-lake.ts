@@ -2,17 +2,12 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 /**
- * Generation 1 of the lake: Hive-partitioned Parquet and nothing else.
+ * Generation 1 of the lake: Hive-partitioned Parquet with no catalog, so something
+ * has to walk the directory to find out which files a query should read.
  *
- * This module is the gap in section 6 of the plan that has no name in the table -
- * "no catalog" - made concrete. There is no metadata anywhere, so something has to
- * walk the directory and produce the list of files a query should read. Over HTTP
- * that is not even possible: `httpfs` cannot glob a remote directory, so the list
- * must be resolved somewhere with a filesystem and shipped to whoever is reading.
- *
- * Day 3 deletes all of this. DuckLake answers "which files make up this table" with
- * one query against Postgres, and the answer is correct mid-write, which a directory
- * listing never is.
+ * Over HTTP that is not possible at all, since `httpfs` cannot glob a remote
+ * directory. DuckLake replaces this with one metadata query that is also correct
+ * mid-write, which a directory listing never is.
  */
 
 export interface LakeFile {
@@ -68,13 +63,10 @@ export function totalBytes(files: readonly LakeFile[]): number {
 }
 
 /**
- * Blocks until the HTTP host reports the same size for every file that is on disk.
+ * Blocks until the HTTP host reports the same size for every file on disk.
  *
- * The lake is a bind mount into the container running nginx, and propagation across
- * that boundary is not instant. Querying a freshly written variant hits a file the
- * web server has not seen yet and fails with "too small to be a Parquet file" - a
- * confusing way to learn about mount latency. Checking is cheaper than retrying a
- * measurement that produced a wrong number instead of an error.
+ * The lake is a bind mount into the nginx container and propagation is not instant,
+ * so a freshly written file fails with "too small to be a Parquet file".
  */
 export async function waitForLakeFiles(
   baseUrl: string,
@@ -99,12 +91,8 @@ export async function waitForLakeFiles(
 const toUrlPath = (path: string): string => path.split(sep).join('/');
 
 /**
- * Makes a filesystem path safe to put in a URL without disturbing its structure.
- *
- * `encodeURI` rather than `encodeURIComponent`, and that distinction is load
- * bearing: a Hive directory is named `month=2025-03`, and percent-encoding the `=`
- * leaves DuckDB unable to read the partition value back out of the path. It escapes
- * the space in `category=Home & Kitchen` and leaves the separators alone, which is
- * exactly the split we need.
+ * `encodeURI`, not `encodeURIComponent`: a Hive directory is named `month=2025-03`,
+ * and percent-encoding the `=` leaves DuckDB unable to read the partition value back
+ * out of the path. It still escapes the space in `category=Home & Kitchen`.
  */
 const encodeLakePath = (path: string): string => encodeURI(path);

@@ -33,9 +33,10 @@ export async function loadStar(
   await client.connect();
   await client.query(`SET TimeZone = 'UTC'`);
 
-  // DDL through the Postgres client, not through DuckDB's ATTACH: the schema is
-  // Postgres' own - PRIMARY KEY, REFERENCES, NUMERIC(12,2) - and running it verbatim
-  // keeps it out of a type translation layer.
+  /*
+   * DDL through the Postgres client rather than DuckDB's ATTACH: the schema is
+   * Postgres' own, and running it verbatim keeps it out of a translation layer.
+   */
   await client.query(readSqlFile('03_star.postgres.sql'));
 
   const insertStarted = performance.now();
@@ -44,8 +45,7 @@ export async function loadStar(
     for (const table of DIMENSIONS) {
       await duck.run(`INSERT INTO ${alias}.${table} SELECT * FROM ${table}`);
     }
-    // `month` exists only in the lake copy, as its Hive partition key. The heap has
-    // no partitions, so storing it would be megabytes of redundant text.
+    // `month` is the lake's partition key; the heap has no partitions to key.
     await duck.run(`INSERT INTO ${alias}.fact_order_item SELECT * EXCLUDE (month) FROM fact_order_item`);
     await duck.run(`INSERT INTO ${alias}.fact_inventory_snapshot SELECT * FROM fact_inventory_snapshot`);
   } finally {

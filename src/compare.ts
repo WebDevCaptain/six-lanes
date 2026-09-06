@@ -1,6 +1,7 @@
 import { appendFileSync } from 'node:fs';
 
-import { findMismatches } from './bench/compare';
+import { BENCH } from './bench/measure';
+import { disagreements, runCatalogue, type MeasuredRow } from './bench/run-catalogue';
 import {
   formatBytes,
   formatCount,
@@ -12,34 +13,34 @@ import {
 import { DATASET, PATHS } from './config';
 import { describeHost } from './host';
 import { BASELINE_LANE, LANE_META, openAvailableLanes } from './lanes/index';
-import { DEFAULT_PARAMS, QUERY_IDS, getQuery, type QueryId } from './queries/index';
-import type { Lane, LaneId, LaneResult } from './types';
+import { DEFAULT_PARAMS, QUERY_IDS, getQuery } from './queries/index';
+import type { LaneId } from './types';
 
 /**
  * `pnpm compare` - runs every available lane over every query, checks that they
- * agree, and prints the one table this project exists to produce.
+ * agree, and prints the table. `--write` appends the run to docs/results.md.
  *
- * `pnpm compare --write` also appends the run to docs/results.md, so the lab
- * notebook is a by-product of measuring rather than a thing to remember to update.
- *
- * Exits non-zero when any lane disagrees with lane A. That gate is deliberately
- * fatal: a published timing next to a wrong answer is worse than no number at all.
+ * Exits non-zero when a lane disagrees with lane A, and withholds that lane's
+ * timing: a published number next to a wrong answer is worse than no number.
  */
 const LANES_TO_RUN: readonly LaneId[] = ['postgres', 'duckdb-postgres', 'duckdb-lake'];
 
-interface ResultRow {
-  readonly queryId: QueryId;
-  readonly result: LaneResult;
-}
-
-const COLUMNS: readonly Column<ResultRow>[] = [
+const COLUMNS: readonly Column<MeasuredRow>[] = [
   { header: 'query', value: ({ queryId }) => queryId },
   {
     header: 'lane',
     value: ({ result }) => `${LANE_META[result.laneId].letter}  ${LANE_META[result.laneId].label}`,
   },
-  { header: 'median', align: 'right', value: ({ result }) => formatMs(result.timings.warmMs) },
-  { header: 'p95', align: 'right', value: ({ result }) => formatMs(result.timings.p95Ms) },
+  {
+    header: 'median',
+    align: 'right',
+    value: ({ result, agrees }) => (agrees ? formatMs(result.timings.warmMs) : 'withheld'),
+  },
+  {
+    header: 'p95',
+    align: 'right',
+    value: ({ result, agrees }) => (agrees ? formatMs(result.timings.p95Ms) : '-'),
+  },
   {
     header: 'engine',
     align: 'right',
@@ -59,56 +60,36 @@ if (!lanes.some((lane) => lane.id === BASELINE_LANE)) {
 
 const host = describeHost();
 const parameters = `from=${DEFAULT_PARAMS.from}  to=${DEFAULT_PARAMS.to}  order_id=${DEFAULT_PARAMS.orderId}`;
+const protocol = `${BENCH.timedRuns} timed runs per cell after ${BENCH.warmupRuns} warm-up; median and p95, never a mean.`;
 
-const rows: ResultRow[] = [];
-const failures: string[] = [];
-
-for (const queryId of QUERY_IDS) {
-  const results = await runAll(lanes, queryId);
-  const baseline = results.find((result) => result.laneId === BASELINE_LANE)!;
-
-  for (const mismatch of findMismatches(baseline, results.filter((r) => r !== baseline))) {
-    failures.push(`${queryId} / lane ${LANE_META[mismatch.laneId as LaneId].letter}: ${mismatch.detail}`);
-  }
-  rows.push(...results.map((result) => ({ queryId, result })));
-}
-
+const rows = await runCatalogue(lanes, DEFAULT_PARAMS);
 for (const lane of lanes) await lane.close();
 
 console.log(`${host}\n`);
 console.log(`parameters  ${parameters}\n`);
 console.log(renderTable(COLUMNS, rows));
-console.log(`\n${DATASET.orderItems.toLocaleString()} line items. ${describeProtocol()}`);
+console.log(`\n${DATASET.orderItems.toLocaleString('en-US')} line items. ${protocol}`);
 
 for (const queryId of QUERY_IDS) console.log(`  ${queryId.padEnd(26)}${getQuery(queryId).concept}`);
 
 console.log(`\n${describePushdown()}`);
 
-if (failures.length > 0) {
-  console.error(`\n${failures.length} lane(s) disagreed with lane A:\n`);
-  for (const failure of failures) console.error(`  ${failure}`);
+const failed = disagreements(rows);
+if (failed.length > 0) {
+  console.error(`\n${failed.length} lane/query pair(s) disagreed with lane A:\n`);
+  for (const row of failed) {
+    console.error(`  ${row.queryId} / lane ${LANE_META[row.result.laneId].letter}: ${row.disagreement}`);
+  }
   process.exitCode = 1;
 } else {
   console.log('\nall lanes agree with lane A on every query.');
   if (process.argv.includes('--write')) writeResults();
 }
 
-async function runAll(lanes: readonly Lane[], queryId: QueryId): Promise<LaneResult[]> {
-  const results: LaneResult[] = [];
-  for (const lane of lanes) results.push(await lane.run(queryId, DEFAULT_PARAMS));
-  return results;
-}
-
-function describeProtocol(): string {
-  const runs = rows[0]?.result.timings.runs ?? 0;
-  return `${runs} timed runs per cell after 1 warm-up; median and p95, never a mean.`;
-}
-
 /**
- * What each lane got its storage layer to do for it.
- *
- * This is the whole subject of lane B. Federation's bet is that the remote side
- * does the filtering; the rows that still crossed the wire say how the bet paid off.
+ * What each lane got its storage layer to do for it, which is the whole subject of
+ * lane B: federation's bet is that the remote side filters, and the rows that still
+ * crossed the wire say how the bet paid off.
  */
 function describePushdown(): string {
   const lines = ['pushdown, per lane:'];
@@ -131,7 +112,7 @@ function describePushdown(): string {
 function writeResults(): void {
   const section = [
     ``,
-    `### ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC - ${DATASET.orderItems.toLocaleString()} line items`,
+    `### ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC - ${DATASET.orderItems.toLocaleString('en-US')} line items`,
     ``,
     `\`${host}\``,
     ``,
@@ -139,7 +120,7 @@ function writeResults(): void {
     ``,
     renderMarkdownTable(COLUMNS, rows),
     ``,
-    describeProtocol(),
+    protocol,
     ``,
   ].join('\n');
 

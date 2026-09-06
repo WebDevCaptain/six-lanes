@@ -12,13 +12,11 @@ export const metadata = { title: 'Local bench - OLAP Lab' };
 export const dynamic = 'force-dynamic';
 
 /**
- * The lane that cannot be deployed.
+ * The lane that cannot be deployed: pg_duckdb needs `shared_preload_libraries`, which
+ * no managed Postgres allows.
  *
- * pg_duckdb needs `shared_preload_libraries`, which no managed Postgres allows, so
- * lane F can only ever be measured on a machine somebody owns. Its numbers are
- * committed to bench/results/ by `pnpm bench` and rendered here, labelled as locally
- * measured and stamped with the machine, rather than being quietly mixed in with the
- * live lanes on the race page.
+ * Its numbers are committed by `pnpm bench` and rendered here, labelled as locally
+ * measured, rather than mixed in with the live lanes on the race page.
  */
 interface BenchRecord {
   readonly measuredAt: string;

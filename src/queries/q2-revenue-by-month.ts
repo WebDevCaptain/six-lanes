@@ -2,15 +2,14 @@ import { monthOf, rangeFilter, table } from './dialect';
 import type { QueryDef } from './types';
 
 /**
- * Q2 - the partition pruning query, and the only one that needs no dimension.
+ * Q2 - the partition pruning query, and the only one needing no dimension.
  *
- * The month comes from the fact table itself: on the lake it is the Hive partition
- * key, already in the file path; elsewhere it is derived from `order_ts`. Both give
- * the same `YYYY-MM` text, which is what lets six engines agree on it.
+ * The month is the Hive partition key on the lake and derived from `order_ts`
+ * elsewhere, both as `YYYY-MM` text, which is what lets the engines agree on it.
  *
- * On the lake this query carries an extra predicate on the partition key. It cannot
- * change the answer - the exact `order_ts` bounds are still there - but it is what
- * stops the engine opening eighteen of the twenty-four monthly files.
+ * On the lake this carries an extra predicate on that key. It cannot change the
+ * answer, since the exact `order_ts` bounds remain, but it stops the engine opening
+ * eighteen of the twenty-four monthly files.
  */
 export const q2RevenueByMonth: QueryDef = {
   question: 'Revenue per month within a date range',

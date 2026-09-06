@@ -105,8 +105,7 @@ describe('reading the lake from somewhere it was never written', () => {
   });
 
   it('prunes on a clustered column the lake is not partitioned by', async () => {
-    // order_id is not the partition key. The catalog's per-file min/max on it still
-    // eliminates 23 of 24 files, and does so before opening a single Parquet footer.
+    // Not the partition key, yet catalog min/max still drops 23 of 24 files.
     const summary = await profiler.measure(
       `SELECT count(*) FROM ${FACT} WHERE order_id = 250000`,
       [],
@@ -126,8 +125,7 @@ describe('time travel', () => {
     const current = await scalar<string>(local, `SELECT count(*) FROM ${FACT}`);
     const empty = await scalar<string>(
       local,
-      // Snapshot N is the state *after* operation N. The table is created empty and
-      // filled by a later insert, so an early version has no rows in it.
+      // Snapshot N is the state after operation N, and the table starts empty.
       `SELECT count(*) FROM ${FACT} AT (VERSION => ${ids[1]})`,
     );
 

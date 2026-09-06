@@ -50,15 +50,10 @@ export interface QueryMetrics {
   /**
    * What the engine says it spent on itself, excluding the client round trip.
    *
-   * The headline timing is deliberately end-to-end, because that is what an
-   * application experiences. But an in-process engine pays no round trip and a
-   * networked one does, and on a query that finishes in a quarter of a millisecond
-   * the round trip is most of the number. Reporting both keeps a point lookup from
-   * looking like a network benchmark.
-   *
-   * Set only when the engine can report it under the same conditions as the timed
-   * runs. An in-process engine leaves it unset, because there its wall time and its
-   * engine time are the same measurement twice.
+   * The headline timing is end-to-end because that is what an application sees, but
+   * on a query finishing in a quarter of a millisecond the round trip is most of it.
+   * Set only where the transport makes the two differ; an in-process engine leaves it
+   * unset rather than reporting the same measurement twice.
    */
   readonly engineMs?: number | undefined;
 }

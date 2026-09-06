@@ -2,17 +2,13 @@ import { monthOf, rangeFilter, table } from './dialect';
 import type { QueryDef } from './types';
 
 /**
- * Q5 - distinct customers and repeat rate by month.
+ * Q5 - distinct customers and repeat rate by month, where the join to `dim_customer`
+ * is the correctness of the query rather than decoration.
  *
- * The join to `dim_customer` is not decoration, it is the correctness of the query.
- * `customer_key` identifies a *version* of a person: a customer who moved country in
- * March has two keys, and counting keys would report them as two customers. Counting
- * `customer_id` counts people.
- *
- * This is the SCD2 trap in its natural habitat. The query looks right either way, the
- * numbers differ by a few percent, and nothing fails - which is why
- * tests/integration/star.test.ts asserts the two counts differ, so the join can never
- * be quietly optimised away.
+ * `customer_key` identifies a version of a person, so someone who moved country in
+ * March has two of them and counting keys reports two customers. The query looks
+ * right either way and nothing fails, which is why the integration tests assert the
+ * two counts differ.
  */
 export const q5RepeatRate: QueryDef = {
   question: 'Distinct customers and repeat rate by month',

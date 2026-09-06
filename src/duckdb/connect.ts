@@ -18,20 +18,13 @@ export interface DuckDBOptions {
 const EXTENSION_NAME = /^[a-z_]+$/;
 
 /**
- * UTC, set at the instance and again on the connection.
+ * UTC, set at the instance and again on the connection, because DuckDB defaults
+ * `TimeZone` to the host zone. In Asia/Kolkata an order at 19:00 UTC on 28 February
+ * is reported by `strftime` as March, so Q2 disagrees with Postgres on some rows, on
+ * some machines.
  *
- * This is not belt and braces, it is a correctness fix with a measured failure mode.
- * DuckDB defaults `TimeZone` to the host zone. On a machine in Asia/Kolkata, an order
- * placed at 19:00 UTC on 28 February is reported by `strftime(order_ts, '%Y-%m')` as
- * **March**, because +05:30 pushes it over midnight. Q2 would then disagree with
- * Postgres about which month a row belongs to, on some rows, on some machines - the
- * worst kind of bug, because it is invisible until someone runs it somewhere else.
- *
- * One quirk worth knowing: this fixes computation but not display. DuckDB 1.5.3 still
- * renders TIMESTAMPTZ with the host offset. That is harmless here because the offset
- * is always explicit in the rendered string and the normaliser reads it - see
- * tests/unit/normalize.test.ts - but it means "the timestamp looks wrong" is not by
- * itself evidence that anything is wrong.
+ * This fixes computation but not display: 1.5.3 still renders TIMESTAMPTZ with the
+ * host offset. Harmless, since the offset is explicit and the normaliser reads it.
  */
 const UTC_CONFIG = { TimeZone: 'UTC' } as const;
 

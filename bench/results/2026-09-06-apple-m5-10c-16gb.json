@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-09-06T06:24:31.677Z",
+  "measuredAt": "2026-09-06T06:35:36.802Z",
   "host": {
     "cpu": "Apple M5",
     "cores": 10,
@@ -60,19 +60,6 @@
       "readsFrom": "Parquet over HTTP",
       "demonstrates": "The lakehouse read path. Column pruning, partition pruning, and no load on the OLTP database at all.",
       "handicaps": []
-    },
-    {
-      "id": "pg-duckdb",
-      "letter": "F",
-      "label": "pg_duckdb",
-      "engine": "DuckDB embedded inside Postgres",
-      "runsOn": "Docker only",
-      "readsFrom": "the local Postgres heap",
-      "demonstrates": "The other direction: bring the column engine to the row store instead of the data to the column store.",
-      "handicaps": [
-        "Cannot be deployed to a managed Postgres: it needs shared_preload_libraries.",
-        "Reads Postgres heap tuples, so it gains vectorised execution but no columnar storage."
-      ]
     }
   ],
   "results": [
@@ -82,14 +69,14 @@
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 41.94404200000008,
-        "p95Ms": 42.73645899999997,
+        "warmMs": 43.65500000000003,
+        "p95Ms": 47.27354200000002,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 113074176,
         "rowsScanned": 1015000,
-        "engineMs": 45.171,
+        "engineMs": 48.939,
         "rowsReturned": 8
       },
       "sql": "SELECT p.category,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nGROUP BY p.category\nORDER BY revenue DESC, p.category"
@@ -100,8 +87,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 38.93537500000002,
-        "p95Ms": 42.678583,
+        "warmMs": 48.00470799999994,
+        "p95Ms": 235.968125,
         "runs": 5
       },
       "metrics": {
@@ -121,8 +108,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 9.272874999999885,
-        "p95Ms": 10.692332999999962,
+        "warmMs": 8.037833999999975,
+        "p95Ms": 8.267333000000008,
         "runs": 5
       },
       "metrics": {
@@ -139,35 +126,19 @@
       "sql": "SELECT p.category,\n       sum(f.revenue) AS revenue\nFROM lake.fact_order_item f\nJOIN lake.dim_product p ON p.product_key = f.product_key\nGROUP BY p.category\nORDER BY revenue DESC, p.category"
     },
     {
-      "queryId": "revenue_by_category",
-      "concept": "Column pruning across a star join",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 69.36774999999989,
-        "p95Ms": 76.74654199999986,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "DuckDB",
-        "rowsReturned": 8
-      },
-      "sql": "SELECT p.category,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nGROUP BY p.category\nORDER BY revenue DESC, p.category"
-    },
-    {
       "queryId": "revenue_by_month_filtered",
       "concept": "Partition pruning and predicate pushdown",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 21.17904199999998,
-        "p95Ms": 22.24479099999985,
+        "warmMs": 20.01062499999989,
+        "p95Ms": 21.503124999999955,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 31268864,
         "rowsScanned": 237171,
-        "engineMs": 19.202,
+        "engineMs": 19.524,
         "rowsReturned": 6
       },
       "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month\nORDER BY month"
@@ -178,8 +149,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 22.504834000000074,
-        "p95Ms": 24.724749999999858,
+        "warmMs": 25.117750000000115,
+        "p95Ms": 28.09979199999998,
         "runs": 5
       },
       "metrics": {
@@ -199,8 +170,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 6.700874999999996,
-        "p95Ms": 7.093416000000161,
+        "warmMs": 7.365625000000136,
+        "p95Ms": 7.852208000000019,
         "runs": 5
       },
       "metrics": {
@@ -217,29 +188,13 @@
       "sql": "SELECT f.month AS month,\n       sum(f.revenue) AS revenue\nFROM lake.fact_order_item f\nWHERE f.month >= strftime(CAST($1 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.month <= strftime(CAST($2 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.order_ts >= CAST($1 AS TIMESTAMPTZ)\n  AND f.order_ts <  CAST($2 AS TIMESTAMPTZ)\nGROUP BY month\nORDER BY month"
     },
     {
-      "queryId": "revenue_by_month_filtered",
-      "concept": "Partition pruning and predicate pushdown",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 20.148500000000013,
-        "p95Ms": 20.54745899999989,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "Postgres (DuckDB declined)",
-        "rowsReturned": 6
-      },
-      "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       sum(f.revenue) AS revenue\nFROM fact_order_item f\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month\nORDER BY month"
-    },
-    {
       "queryId": "order_lookup",
       "concept": "Point lookup: where the row store wins",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 0.27708300000017516,
-        "p95Ms": 0.28779099999997015,
+        "warmMs": 0.2517499999999018,
+        "p95Ms": 0.3185000000000855,
         "runs": 5
       },
       "metrics": {
@@ -256,8 +211,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 3.4865409999999883,
-        "p95Ms": 3.8904159999999592,
+        "warmMs": 3.4097079999999096,
+        "p95Ms": 3.5545840000002045,
         "runs": 5
       },
       "metrics": {
@@ -287,8 +242,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 5.462750000000142,
-        "p95Ms": 5.6902500000001055,
+        "warmMs": 5.552208999999948,
+        "p95Ms": 5.911125000000084,
         "runs": 5
       },
       "metrics": {
@@ -315,35 +270,19 @@
       "sql": "SELECT order_item_id,\n       order_id,\n       order_ts,\n       date_key,\n       customer_key,\n       product_key,\n       channel,\n       quantity,\n       unit_price,\n       discount_amount,\n       revenue,\n       cost\nFROM lake.fact_order_item\nWHERE order_id = $1\nORDER BY order_item_id"
     },
     {
-      "queryId": "order_lookup",
-      "concept": "Point lookup: where the row store wins",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 2.937582999999904,
-        "p95Ms": 4.648749999999836,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "DuckDB",
-        "rowsReturned": 3
-      },
-      "sql": "SELECT order_item_id,\n       order_id,\n       order_ts,\n       date_key,\n       customer_key,\n       product_key,\n       channel,\n       quantity,\n       unit_price,\n       discount_amount,\n       revenue,\n       cost\nFROM fact_order_item\nWHERE order_id = $1\nORDER BY order_item_id"
-    },
-    {
       "queryId": "top_categories",
       "concept": "Star join with a range filter; LIMIT after aggregation",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 120.90820900000017,
-        "p95Ms": 123.86779100000012,
+        "warmMs": 124.68954200000007,
+        "p95Ms": 125.53604200000018,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 31277056,
         "rowsScanned": 242171,
-        "engineMs": 126.161,
+        "engineMs": 132.997,
         "rowsReturned": 5
       },
       "sql": "SELECT p.category,\n       sum(f.revenue)          AS revenue,\n       count(DISTINCT f.order_id) AS orders\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY p.category\nORDER BY revenue DESC, p.category\nLIMIT $3"
@@ -354,8 +293,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 28.81770800000004,
-        "p95Ms": 32.88974999999982,
+        "warmMs": 29.842290999999932,
+        "p95Ms": 35.503917,
         "runs": 5
       },
       "metrics": {
@@ -378,8 +317,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 11.972374999999829,
-        "p95Ms": 13.22250000000031,
+        "warmMs": 12.082082999999784,
+        "p95Ms": 12.574082999999973,
         "runs": 5
       },
       "metrics": {
@@ -398,35 +337,19 @@
       "sql": "SELECT p.category,\n       sum(f.revenue)          AS revenue,\n       count(DISTINCT f.order_id) AS orders\nFROM lake.fact_order_item f\nJOIN lake.dim_product p ON p.product_key = f.product_key\nWHERE f.month >= strftime(CAST($1 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.month <= strftime(CAST($2 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.order_ts >= CAST($1 AS TIMESTAMPTZ)\n  AND f.order_ts <  CAST($2 AS TIMESTAMPTZ)\nGROUP BY p.category\nORDER BY revenue DESC, p.category\nLIMIT $3"
     },
     {
-      "queryId": "top_categories",
-      "concept": "Star join with a range filter; LIMIT after aggregation",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 36.6740420000001,
-        "p95Ms": 39.59762499999988,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "DuckDB",
-        "rowsReturned": 5
-      },
-      "sql": "SELECT p.category,\n       sum(f.revenue)          AS revenue,\n       count(DISTINCT f.order_id) AS orders\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY p.category\nORDER BY revenue DESC, p.category\nLIMIT $3"
-    },
-    {
       "queryId": "rolling_revenue",
       "concept": "Window functions over a dense calendar spine",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 28.025624999999764,
-        "p95Ms": 28.858749999999873,
+        "warmMs": 26.18012499999986,
+        "p95Ms": 27.118417000000136,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 30867456,
         "rowsScanned": 237355,
-        "engineMs": 28.926,
+        "engineMs": 29.175,
         "rowsReturned": 184
       },
       "sql": "WITH daily AS (\n  SELECT d.date_key,\n         coalesce(sum(f.revenue), 0) AS revenue\n  FROM dim_date d\n  LEFT JOIN fact_order_item f\n    ON f.date_key = d.date_key\n   AND f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  WHERE d.date >= ($1::timestamptz AT TIME ZONE 'UTC')::date\n    AND d.date <  ($2::timestamptz AT TIME ZONE 'UTC')::date\n  GROUP BY d.date_key\n)\nSELECT date_key,\n       revenue,\n       sum(revenue) OVER (ORDER BY date_key ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS rolling_30d\nFROM daily\nORDER BY date_key"
@@ -437,8 +360,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 25.148541999999907,
-        "p95Ms": 30.059833000000253,
+        "warmMs": 25.182000000000244,
+        "p95Ms": 30.026292000000012,
         "runs": 5
       },
       "metrics": {
@@ -460,8 +383,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 9.851791999999932,
-        "p95Ms": 10.197707999999693,
+        "warmMs": 9.104791000000205,
+        "p95Ms": 9.78991700000006,
         "runs": 5
       },
       "metrics": {
@@ -485,35 +408,19 @@
       "sql": "WITH daily AS (\n  SELECT d.date_key,\n         coalesce(sum(f.revenue), 0) AS revenue\n  FROM lake.dim_date d\n  LEFT JOIN lake.fact_order_item f\n    ON f.date_key = d.date_key\n   AND f.month >= strftime(CAST($1 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.month <= strftime(CAST($2 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.order_ts >= CAST($1 AS TIMESTAMPTZ)\n  AND f.order_ts <  CAST($2 AS TIMESTAMPTZ)\n  WHERE d.date >= CAST(CAST($1 AS TIMESTAMPTZ) AS DATE)\n    AND d.date <  CAST(CAST($2 AS TIMESTAMPTZ) AS DATE)\n  GROUP BY d.date_key\n)\nSELECT date_key,\n       revenue,\n       sum(revenue) OVER (ORDER BY date_key ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS rolling_30d\nFROM daily\nORDER BY date_key"
     },
     {
-      "queryId": "rolling_revenue",
-      "concept": "Window functions over a dense calendar spine",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 27.963958000000275,
-        "p95Ms": 28.93512499999997,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "Postgres (DuckDB declined)",
-        "rowsReturned": 184
-      },
-      "sql": "WITH daily AS (\n  SELECT d.date_key,\n         coalesce(sum(f.revenue), 0) AS revenue\n  FROM dim_date d\n  LEFT JOIN fact_order_item f\n    ON f.date_key = d.date_key\n   AND f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  WHERE d.date >= ($1::timestamptz AT TIME ZONE 'UTC')::date\n    AND d.date <  ($2::timestamptz AT TIME ZONE 'UTC')::date\n  GROUP BY d.date_key\n)\nSELECT date_key,\n       revenue,\n       sum(revenue) OVER (ORDER BY date_key ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS rolling_30d\nFROM daily\nORDER BY date_key"
-    },
-    {
       "queryId": "repeat_rate",
       "concept": "Counting people, not surrogate keys",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 148.02870800000073,
-        "p95Ms": 153.48566699999992,
+        "warmMs": 150.03283399999964,
+        "p95Ms": 152.05912500000068,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 55779328,
         "rowsScanned": 477267,
-        "engineMs": 154.9,
+        "engineMs": 170.711,
         "rowsReturned": 6
       },
       "sql": "WITH per_customer AS (\n  SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM')      AS month,\n         c.customer_id,\n         count(DISTINCT f.order_id)   AS orders\n  FROM fact_order_item f\n  JOIN dim_customer c ON c.customer_key = f.customer_key\n  WHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  GROUP BY month, c.customer_id\n)\nSELECT month,\n       count(*)                                             AS customers,\n       count(*) FILTER (WHERE orders > 1)                   AS repeat_customers,\n       round(100.0 * count(*) FILTER (WHERE orders > 1) / count(*), 2) AS repeat_rate_pct\nFROM per_customer\nGROUP BY month\nORDER BY month"
@@ -524,8 +431,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 58.52991699999984,
-        "p95Ms": 63.95824999999968,
+        "warmMs": 60.6397079999997,
+        "p95Ms": 65.92266699999982,
         "runs": 5
       },
       "metrics": {
@@ -547,8 +454,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 14.191458000000239,
-        "p95Ms": 15.68487500000083,
+        "warmMs": 14.618542000000161,
+        "p95Ms": 14.753125000000182,
         "runs": 5
       },
       "metrics": {
@@ -567,35 +474,19 @@
       "sql": "WITH per_customer AS (\n  SELECT f.month      AS month,\n         c.customer_id,\n         count(DISTINCT f.order_id)   AS orders\n  FROM lake.fact_order_item f\n  JOIN lake.dim_customer c ON c.customer_key = f.customer_key\n  WHERE f.month >= strftime(CAST($1 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.month <= strftime(CAST($2 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.order_ts >= CAST($1 AS TIMESTAMPTZ)\n  AND f.order_ts <  CAST($2 AS TIMESTAMPTZ)\n  GROUP BY month, c.customer_id\n)\nSELECT month,\n       count(*)                                             AS customers,\n       count(*) FILTER (WHERE orders > 1)                   AS repeat_customers,\n       round(100.0 * count(*) FILTER (WHERE orders > 1) / count(*), 2) AS repeat_rate_pct\nFROM per_customer\nGROUP BY month\nORDER BY month"
     },
     {
-      "queryId": "repeat_rate",
-      "concept": "Counting people, not surrogate keys",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 169.58837500000027,
-        "p95Ms": 170.90200000000004,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "Postgres (DuckDB declined)",
-        "rowsReturned": 6
-      },
-      "sql": "WITH per_customer AS (\n  SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM')      AS month,\n         c.customer_id,\n         count(DISTINCT f.order_id)   AS orders\n  FROM fact_order_item f\n  JOIN dim_customer c ON c.customer_key = f.customer_key\n  WHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\n  GROUP BY month, c.customer_id\n)\nSELECT month,\n       count(*)                                             AS customers,\n       count(*) FILTER (WHERE orders > 1)                   AS repeat_customers,\n       round(100.0 * count(*) FILTER (WHERE orders > 1) / count(*), 2) AS repeat_rate_pct\nFROM per_customer\nGROUP BY month\nORDER BY month"
-    },
-    {
       "queryId": "category_by_month",
       "concept": "Two-dimension grouping, wide output",
       "laneId": "postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 25.462875000000167,
-        "p95Ms": 27.068707999999788,
+        "warmMs": 29.675458000000617,
+        "p95Ms": 30.214915999999903,
         "runs": 5
       },
       "metrics": {
         "bytesRead": 32669696,
         "rowsScanned": 252171,
-        "engineMs": 27.105,
+        "engineMs": 28.738,
         "rowsReturned": 48
       },
       "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       p.category,\n       sum(f.revenue)  AS revenue,\n       sum(f.quantity) AS units\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month, p.category\nORDER BY month, p.category"
@@ -606,8 +497,8 @@
       "laneId": "duckdb-postgres",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 29.048416999999972,
-        "p95Ms": 34.53108400000019,
+        "warmMs": 30.347625000000335,
+        "p95Ms": 31.66962499999954,
         "runs": 5
       },
       "metrics": {
@@ -630,8 +521,8 @@
       "laneId": "duckdb-lake",
       "agreesWithBaseline": true,
       "timings": {
-        "warmMs": 9.848125000000437,
-        "p95Ms": 10.319499999999607,
+        "warmMs": 9.564750000000458,
+        "p95Ms": 10.080124999999498,
         "runs": 5
       },
       "metrics": {
@@ -649,22 +540,6 @@
         "rowsReturned": 48
       },
       "sql": "SELECT f.month AS month,\n       p.category,\n       sum(f.revenue)  AS revenue,\n       sum(f.quantity) AS units\nFROM lake.fact_order_item f\nJOIN lake.dim_product p ON p.product_key = f.product_key\nWHERE f.month >= strftime(CAST($1 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.month <= strftime(CAST($2 AS TIMESTAMPTZ), '%Y-%m')\n  AND f.order_ts >= CAST($1 AS TIMESTAMPTZ)\n  AND f.order_ts <  CAST($2 AS TIMESTAMPTZ)\nGROUP BY month, p.category\nORDER BY month, p.category"
-    },
-    {
-      "queryId": "category_by_month",
-      "concept": "Two-dimension grouping, wide output",
-      "laneId": "pg-duckdb",
-      "agreesWithBaseline": true,
-      "timings": {
-        "warmMs": 26.15124999999989,
-        "p95Ms": 27.24958400000014,
-        "runs": 5
-      },
-      "metrics": {
-        "executedBy": "Postgres (DuckDB declined)",
-        "rowsReturned": 48
-      },
-      "sql": "SELECT to_char(f.order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month,\n       p.category,\n       sum(f.revenue)  AS revenue,\n       sum(f.quantity) AS units\nFROM fact_order_item f\nJOIN dim_product p ON p.product_key = f.product_key\nWHERE f.order_ts >= $1::timestamptz\n  AND f.order_ts <  $2::timestamptz\nGROUP BY month, p.category\nORDER BY month, p.category"
     }
   ]
 }

@@ -2,18 +2,12 @@ import { POSTGRES_URL } from '../config';
 import { toLibpqConnectionString } from '../postgres/connection';
 
 /**
- * Generation 2 of the lake: DuckLake.
+ * Generation 2 of the lake: metadata in Postgres, data in Parquet.
  *
- * The metadata lives in Postgres and the data lives in Parquet. Iceberg and Delta put
- * their metadata in files on the object store and then need a catalog service in front
- * of it anyway; DuckLake starts from the observation that a catalog is a database and
- * uses one.
- *
- * For this project that is not just tidier, it is the answer to a question the raw
- * lake could not answer at all. `httpfs` cannot list a remote directory, so reading
- * generation 1 over HTTP means resolving the file list somewhere else first. DuckLake
- * answers "which files are in this table" with one query, transactionally, and the
- * answer is right even while somebody is writing.
+ * Iceberg and Delta put metadata in files on the object store and then need a catalog
+ * service in front of it anyway; DuckLake starts from the observation that a catalog
+ * is a database. Here that also answers a question generation 1 could not: `httpfs`
+ * cannot list a remote directory, and this returns the file list in one query.
  */
 
 /**
@@ -26,11 +20,7 @@ export const DUCKLAKE = {
   alias: 'lake',
   /** Postgres schema for the metadata tables, kept out of `public`. */
   metadataSchema: 'ducklake',
-  table: 'orders',
 } as const;
-
-/** `lake.orders` - what the query catalogue reads from on lane C. */
-export const DUCKLAKE_RELATION = `${DUCKLAKE.alias}.${DUCKLAKE.table}`;
 
 /**
  * A DuckLake metadata table, fully qualified.

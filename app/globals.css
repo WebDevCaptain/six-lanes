@@ -387,7 +387,7 @@ summary:focus-visible {
 }
 
 .handicaps li::before {
-  content: '\2014\a0';
+  content: '-\a0';
   color: var(--ink-faint);
 }
 

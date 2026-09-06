@@ -5,13 +5,12 @@ import type { QueryValue } from '../queries/types';
 import type { Lane, LaneId, QueryMetrics } from '../types';
 
 /**
- * Lane A - Postgres 18 doing an OLAP job. The baseline everything is measured
- * against, and the only lane whose results are treated as the correct answer.
+ * Lane A - Postgres 18 doing an OLAP job, and the only lane whose rows are treated
+ * as the correct answer.
  *
- * Also the body of lane F: pg_duckdb is the same wire protocol and the same SQL,
- * with one session setting changed. Sharing the implementation is what makes that
- * comparison fair - anything else and the two lanes would differ in the harness as
- * well as in the engine.
+ * Also the body of lane F, which is the same protocol and SQL with one session
+ * setting changed. Sharing the implementation keeps the two lanes differing in the
+ * engine rather than in the harness.
  */
 export interface PostgresLaneOptions {
   readonly id: LaneId;
@@ -35,10 +34,15 @@ const BLOCK_BYTES = 8192;
 export async function createPostgresLane(options: PostgresLaneOptions): Promise<Lane> {
   const client = new pg.Client({ connectionString: options.connectionString });
   await client.connect();
-  // Same invariant as every DuckDB connection: one timezone, or the engines will
-  // disagree about which month a midnight belongs to.
-  await client.query(`SET TimeZone = 'UTC'`);
-  for (const statement of options.sessionSetup ?? []) await client.query(statement);
+  try {
+    // One timezone, or the engines disagree which month a midnight belongs to.
+    await client.query(`SET TimeZone = 'UTC'`);
+    for (const statement of options.sessionSetup ?? []) await client.query(statement);
+  } catch (cause) {
+    // Setup failing leaves a live connection nobody holds a reference to.
+    await client.end().catch(() => undefined);
+    throw cause;
+  }
 
   const spec: LaneSpec = {
     id: options.id,
@@ -103,14 +107,10 @@ interface ExplainResult {
 /**
  * Which engine is really going to run this.
  *
- * pg_duckdb does not fail when DuckDB cannot handle a statement. It emits a WARNING
- * that no client surfaces, produces an ordinary Postgres plan, and returns the right
- * answer at ordinary Postgres speed. Measured against this catalogue, three of the
- * seven queries fall back - all of them because DuckDB has no `to_char` - and without
- * this check lane F would report those three as pg_duckdb results.
- *
- * A plain EXPLAIN, not EXPLAIN ANALYZE: the plan is all that is being read, and this
- * runs outside the timed loop.
+ * pg_duckdb does not fail when DuckDB cannot handle a statement: it warns where no
+ * client sees it, plans the Postgres way, and returns the right answer at Postgres
+ * speed. Four of the seven queries fall back, all on `to_char`, and without this
+ * check lane F would report them as pg_duckdb results.
  */
 async function detectExecutor(
   client: pg.Client,
@@ -134,16 +134,12 @@ interface PlanNode {
 }
 
 /**
- * Rows the plan actually pulled off the relations.
+ * Rows the plan pulled off the relations.
  *
- * Only nodes carrying `Relation Name` count, which picks out base-relation scans
- * and skips the Bitmap Index Scan sitting underneath a Bitmap Heap Scan - counting
- * both would double the figure. Under a parallel plan `Actual Rows` is per loop and
- * `Actual Loops` is the number of workers, so the product is the total.
- *
- * Postgres 18 reports `Actual Rows` as a per-loop mean with two decimals, so the
- * product of an uneven split across workers lands just off a whole row. Rounded,
- * because a scan reads rows and there is no such thing as 999,999.99 of them.
+ * Only nodes with `Relation Name` count: that skips the Bitmap Index Scan under a
+ * Bitmap Heap Scan, which would otherwise double the figure. Under a parallel plan
+ * `Actual Rows` is a per-loop mean, so the product with `Actual Loops` is the total,
+ * and rounding removes the fraction an uneven split leaves behind.
  */
 function countScannedRows(node: PlanNode): number {
   const own =

@@ -8,15 +8,11 @@ import { DEFAULT_PARAMS, QUERY_IDS } from '../../src/queries/index';
 import type { Lane, LaneResult } from '../../src/types';
 
 /**
- * Lane F, and the reason it needs watching.
+ * Lane F, and the reason it needs watching: pg_duckdb accepts every statement and
+ * quietly hands back the ones DuckDB cannot translate, so without the executor check
+ * it would publish plain-Postgres timings under a DuckDB heading.
  *
- * pg_duckdb accepts every statement. When DuckDB cannot translate one it emits a
- * warning no client surfaces, plans it the ordinary Postgres way, and returns the
- * right answer at Postgres speed. Without the executor check, lane F would publish
- * plain-Postgres timings under a DuckDB heading and nothing would look wrong.
- *
- * Skipped when the container is not running: lane F cannot be deployed anywhere, so
- * the rest of the project has to work without it.
+ * Skipped when the container is not running, since lane F is optional.
  */
 const available = await isReachable(PGDUCKDB_URL);
 
@@ -58,8 +54,7 @@ describe.skipIf(!available)('lane F: pg_duckdb', () => {
   });
 
   it('does decline some, which is the whole reason the check exists', () => {
-    // Four of the seven group by month via to_char, which DuckDB does not implement.
-    // If this ever stops being true the finding has changed and the write-up is stale.
+    // Four group by month via to_char. If that changes, the write-up is stale.
     const declined = QUERY_IDS.filter((id) => results.get(id)!.metrics.executedBy !== 'DuckDB');
     expect(declined.length).toBeGreaterThan(0);
   });

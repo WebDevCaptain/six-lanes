@@ -49,8 +49,7 @@ describe.each(QUERY_IDS)('%s', (queryId) => {
       expect(result.timings.runs).toBe(5);
       expect(result.timings.p95Ms).toBeGreaterThanOrEqual(result.timings.warmMs);
       expect(result.metrics.rowsReturned).toBe(result.rows.length);
-      // Lane B reads over the Postgres wire protocol, which DuckDB does not
-      // instrument, so it reports no byte count rather than a made-up one.
+      // Lane B's transport is not instrumented, so it reports no byte count.
       if (result.laneId === 'duckdb-postgres') expect(result.metrics.bytesRead).toBeUndefined();
       else expect(result.metrics.bytesRead).toBeGreaterThan(0);
     }
@@ -80,8 +79,7 @@ describe('the argument the project is making', () => {
   });
 
   it('Q1: reads three columns of thirteen, and not one more', () => {
-    // `product_key` joins the star, `revenue` is summed, `category` is the grouping.
-    // Everything else in the fact table and the product dimension is skipped.
+    // Join key, measure, grouping. Everything else in both tables is skipped.
     const lake = results.get('revenue_by_category')!.find((r) => r.laneId === 'duckdb-lake')!;
     expect(lake.metrics.columnsProjected).toEqual(['category', 'product_key', 'revenue']);
   });
@@ -98,9 +96,11 @@ describe('the argument the project is making', () => {
     const lake = results.get('order_lookup')!.find((r) => r.laneId === 'duckdb-lake')!;
 
     expect(heap.timings.warmMs).toBeLessThan(lake.timings.warmMs);
-    // Engine time, not wall time: at a third of a millisecond the TCP round trip
-    // is most of lane A's wall figure, and comparing that to an in-process engine
-    // would be measuring the network.
+    /*
+     * Engine time, not wall time: at a third of a millisecond the TCP round trip is
+     * most of lane A's figure, and comparing that with an in-process engine would be
+     * measuring the network.
+     */
     expect(lake.timings.warmMs / heap.metrics.engineMs!).toBeGreaterThan(100);
   });
 

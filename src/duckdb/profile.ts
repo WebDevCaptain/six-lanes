@@ -6,18 +6,15 @@ import { join } from 'node:path';
 import type { DuckDBConnection } from '@duckdb/node-api';
 
 /**
- * Reading DuckDB's own accounting out of its JSON query profile.
+ * DuckDB's own accounting, from its JSON query profile. Verified on 1.5.3 before
+ * being relied on; see docs/results.md, "How bytes read is measured":
  *
- * What was verified on DuckDB 1.5.3 before this was written (see docs/results.md,
- * "How bytes read is measured"):
- *
- *   - `total_bytes_read` at the root is exact for reads that go through httpfs, and
- *     tracks column pruning byte for byte. For local file reads it counts only the
- *     footer, so lane C reads the lake over HTTP and never off the disk.
- *   - `operator_rows_scanned` is not rows scanned; it over-reports by an order of
- *     magnitude. The scan operator's `operator_cardinality` is the real figure.
- *   - `extra_info` on a scan carries `Total Files Read` and `Projections`, which is
- *     how partition pruning and column pruning are counted rather than asserted.
+ *   - `total_bytes_read` is exact through httpfs and counts only the footer for a
+ *     local read, which is why lane C reads the lake over HTTP.
+ *   - `operator_rows_scanned` over-reports by an order of magnitude; the scan's
+ *     `operator_cardinality` is the real figure.
+ *   - `extra_info` carries `Total Files Read` and `Projections`, so pruning is
+ *     counted rather than asserted.
  */
 
 const METRICS = {

@@ -6,18 +6,12 @@ import { PATHS } from './config';
 import { connectDuckDB, scalar } from './duckdb/connect';
 
 /**
- * `pnpm measures` - what you are and are not allowed to add up.
+ * `pnpm measures` - what you are and are not allowed to add up, and what an
+ * approximate answer costs.
  *
- * Two lessons that both look like arithmetic and are not.
- *
- * The first is about validity: a fact table's columns fall into classes, and summing
- * one from the wrong class produces a number that is arithmetically correct and
- * semantically meaningless. Nothing errors. The report just says something false.
- *
- * The second is about cost: `count(DISTINCT ...)` is the most expensive thing in the
- * catalogue, and there is an approximate answer available at a fraction of the price.
- * Whether the trade is worth taking is a measurement, not an opinion, so here is the
- * measurement.
+ * Summing a column from the wrong measure class is arithmetically correct and
+ * semantically meaningless, and nothing errors. Whether to trade exactness for speed
+ * on a distinct count is a measurement rather than an opinion, so both are measured.
  */
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
@@ -165,8 +159,7 @@ const COLUMNS: readonly Column<DistinctRow>[] = [
 
 console.log(renderTable(COLUMNS, rows));
 
-// A control, because the errors above are large enough to suspect the data rather
-// than the function. `range(n)` has exactly n distinct values by construction.
+// A control: `range(n)` has exactly n distinct values, so this isolates the function.
 console.log('\n  control - the same function over a known-cardinality sequence:\n');
 for (const n of [1_000, 5_000, 100_000, 600_000]) {
   const result = await duck.runAndReadAll(

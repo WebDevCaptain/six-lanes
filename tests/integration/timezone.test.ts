@@ -6,16 +6,12 @@ import { POSTGRES_URL } from '../../src/config';
 import { connectDuckDB } from '../../src/duckdb/connect';
 
 /**
- * One timezone, or none of the numbers mean anything.
+ * Postgres and DuckDB must agree which month a row belongs to. They do not by
+ * default: DuckDB takes its timezone from the host, so east of Greenwich an evening
+ * order in February is reported as March.
  *
- * The dataset is UTC, the lake is partitioned on a UTC month, and Postgres and DuckDB
- * have to agree about which month a row belongs to. They do not agree by default:
- * DuckDB takes its timezone from the host, and on a machine east of Greenwich an
- * evening order in February is reported as March.
- *
- * These tests exist because that failure is silent, machine-dependent, and affects
- * only the rows near a month boundary - so it would pass review, pass on CI in UTC,
- * and be wrong on a laptop.
+ * Worth testing because the failure is silent, machine-dependent, and touches only
+ * rows near a month boundary: it passes review and passes on a CI runner in UTC.
  */
 const LATE_FEBRUARY = `TIMESTAMPTZ '2025-02-28 19:00:00+00'`;
 
@@ -55,8 +51,7 @@ describe('connectDuckDB', () => {
 
 describe('an unconfigured DuckDB', () => {
   it('is what this guards against: it may disagree, depending on the host', async () => {
-    // Not asserting that it is wrong - on a CI runner in UTC it is right. Asserting
-    // that whatever it says, our configured connection says February.
+    // Not that the bare connection is wrong; in UTC it is right. That ours is not.
     const bare = await (await DuckDBInstance.create(':memory:')).connect();
     const naive = (await bare.runAndReadAll(`SELECT strftime(${LATE_FEBRUARY}, '%Y-%m') AS m`)).getRowsJson()[0]![0];
     const configured = (await duck.runAndReadAll(`SELECT strftime(${LATE_FEBRUARY}, '%Y-%m') AS m`)).getRowsJson()[0]![0];
@@ -71,8 +66,7 @@ describe('an unconfigured DuckDB', () => {
 
 describe('Postgres and DuckDB', () => {
   it('agree on the month of every row in the dataset', async () => {
-    // The real assertion: not a synthetic timestamp, but every month boundary in
-    // 24 months of actual data, counted both ways.
+    // Every month boundary in 24 months of real data, counted both ways.
     const fromPostgres = await client.query<{ month: string; n: string }>(`
       SELECT to_char(order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month, count(*)::text AS n
       FROM fact_order_item GROUP BY 1 ORDER BY 1
@@ -88,8 +82,7 @@ describe('Postgres and DuckDB', () => {
   });
 
   it('agree on the Hive partition each row was written to', async () => {
-    // Stronger still: the month computed from the timestamp must match the month in
-    // the file path, or partition pruning would silently skip matching rows.
+    // The computed month must match the path, or pruning skips matching rows.
     const mismatches = await duck.runAndReadAll(`
       SELECT count(*) AS n
       FROM read_parquet('${process.cwd()}/lake/raw/**/*.parquet', hive_partitioning = true)

@@ -101,9 +101,11 @@ describe('the lake_orders view', () => {
 
 describe('row group statistics', () => {
   it('skips almost the whole lake for a point lookup on a clustered column', async () => {
-    // order_id rises with order_ts and the lake is written in time order, so every
-    // row group's min/max on order_id excludes almost every id. This is why lane C
-    // loses Q7 by a factor of ten rather than by a factor of a thousand.
+    /*
+     * order_id rises with order_ts and the lake is written in time order, so each row
+     * group's min/max excludes almost every id. That is why lane C loses Q7 by a
+     * factor of ten rather than a thousand.
+     */
     const summary = await profiler.measure('SELECT * FROM lake_orders WHERE order_id = 250000', []);
     expect(summary.rowsScanned).toBeLessThan(1000);
     expect(summary.bytesRead).toBeLessThan(lakeBytes * 0.15);

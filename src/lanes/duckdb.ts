@@ -59,10 +59,10 @@ export async function createDuckDBLane(options: DuckDBLaneOptions): Promise<Lane
     measure: async (sql, params) => {
       const summary = await profiler.measure(sql, params);
       return {
-        // Zero means "not instrumented for this transport", not "read nothing".
-        // DuckDB counts bytes through its HTTP file system and nowhere else, so a
-        // lane reading over the Postgres wire protocol reports no byte count rather
-        // than a misleading one.
+        /*
+         * Zero means "not instrumented for this transport", not "read nothing".
+         * DuckDB counts bytes through its HTTP file system and nowhere else.
+         */
         bytesRead: summary.bytesRead > 0 ? summary.bytesRead : undefined,
         rowsScanned: summary.rowsScanned,
         columnsProjected: summary.columnsProjected,

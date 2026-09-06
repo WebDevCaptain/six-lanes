@@ -4,15 +4,12 @@ import type { Cell, Row } from '../types';
 /**
  * One canonical form for every engine's output.
  *
- * The six engines disagree about how to hand back the same value. Postgres returns
- * NUMERIC as `"1234.50"` and TIMESTAMPTZ as a JS Date; DuckDB returns DECIMAL as
- * `"1234.50"` but TIMESTAMPTZ as `"2025-03-14 09:30:00+00"`; DuckDB-WASM returns
- * BIGINT as a JS BigInt. None of those differences are interesting, and all of them
- * would break an equality check that is supposed to be about the data.
+ * The engines disagree about how to hand back the same value: a JS Date here, a
+ * `"2025-03-14 09:30:00+00"` there, a BigInt somewhere else. None of it is
+ * interesting and all of it would break an equality check meant to be about the data.
  *
- * So each query declares its output columns once and this module applies that
- * declaration to every lane. Money never becomes a float on the way through -
- * `0.1 + 0.2` has no place in a comparison whose whole point is exactness.
+ * Each query declares its columns once and this applies that to every lane. Money
+ * never passes through a float on the way.
  */
 export function normalizeRows(
   columns: readonly ColumnSpec[],
@@ -83,8 +80,7 @@ function toInteger(value: unknown, columnName: string): number {
 function toIsoUtc(value: unknown, columnName: string): string {
   if (value instanceof Date) return value.toISOString();
 
-  // DuckDB renders TIMESTAMPTZ as "2025-03-14 09:30:00+00": a space instead of a T,
-  // and a two-digit UTC offset that Date.parse rejects until it has minutes.
+  // DuckDB uses a space instead of a T, and a 2-digit offset Date.parse rejects.
   const text = String(value).trim().replace(' ', 'T');
   const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(text)
     ? text

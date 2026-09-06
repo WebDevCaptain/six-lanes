@@ -2,17 +2,12 @@ import { asDate, rangeFilter, table } from './dialect';
 import type { QueryDef } from './types';
 
 /**
- * Q4 - 30-day rolling revenue.
+ * Q4 - 30-day rolling revenue, and where the date dimension earns its keep.
  *
- * The date dimension earns its keep here. A rolling window over `ROWS BETWEEN 29
- * PRECEDING` counts *rows*, not days, so deriving the daily series from the facts
- * would silently shorten the window across any day that happened to sell nothing.
- * Joining from `dim_date` outward gives a dense spine - every calendar day appears,
- * zero-filled - and then 29 preceding rows really are 29 preceding days.
- *
- * This is the whole argument for a conformed date dimension in one query: not that
- * it stores anything you could not compute, but that it supplies the days on which
- * nothing happened.
+ * `ROWS BETWEEN 29 PRECEDING` counts rows, not days, so a series derived from the
+ * facts would silently shorten the window across any day that sold nothing. Joining
+ * outward from `dim_date` gives a dense, zero-filled spine, and then 29 preceding
+ * rows really are 29 preceding days.
  */
 export const q4RollingRevenue: QueryDef = {
   question: '30-day rolling revenue',

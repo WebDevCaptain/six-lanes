@@ -1,15 +1,10 @@
 /**
  * Turning an Arrow result into the plain rows the normaliser expects.
  *
- * This exists because of a bug the correctness gate caught rather than one anybody
- * predicted. DuckDB-WASM returns results as Arrow, and `Row.toJSON()` hands back a
- * DECIMAL as its **unscaled** integer: a revenue of 3,237,919.01 arrives as
- * 323791901. Nothing throws. The lane simply reported a number a hundred times too
- * large, and it was caught only because its rows were compared with another engine's.
- *
- * The scale is in the Arrow schema, so the fix is to read it from there rather than
- * to guess from the value. Timestamps are here for a related reason: they arrive as
- * bare epoch integers, which the normaliser cannot safely interpret on its own.
+ * DuckDB-WASM's `Row.toJSON()` returns a DECIMAL as its unscaled integer, so revenue
+ * of 3,237,919.01 arrives as 323791901 and nothing throws. The scale is in the Arrow
+ * schema, so it is read from there rather than guessed. Timestamps are here for a
+ * related reason: they arrive as bare epoch integers.
  */
 
 interface ArrowField {
@@ -27,10 +22,11 @@ export function arrowRows(table: ArrowTable): Record<string, unknown>[] {
   const timestamps = new Set<string>();
 
   for (const field of table.schema.fields) {
-    // Structural checks rather than Arrow's Type enum, so this does not break when
-    // duckdb-wasm moves to a different apache-arrow major. Decimal is the only Arrow
-    // type carrying both scale and precision; Timestamp is the only one carrying both
-    // unit and timezone.
+    /*
+     * Structural checks rather than Arrow's Type enum, so a different apache-arrow
+     * major does not break this. Decimal is the only Arrow type carrying both scale
+     * and precision; Timestamp is the only one carrying both unit and timezone.
+     */
     if (typeof field.type['scale'] === 'number' && typeof field.type['precision'] === 'number') {
       decimals.set(field.name, field.type['scale']);
     } else if (typeof field.type['unit'] === 'number' && 'timezone' in field.type) {
@@ -61,16 +57,10 @@ function applyScale(value: unknown, scale: number): unknown {
 }
 
 /**
- * Arrow timestamps arrive already normalised to epoch milliseconds.
- *
- * Not what the schema implies. DuckDB declares TIMESTAMPTZ as Arrow unit
- * MICROSECOND, and rescaling by that unit produced 1970-01-21 for an order placed in
- * July 2025 - because apache-arrow has already done the conversion by the time
- * `toJSON` hands the value over. Observed directly on duckdb-wasm 1.33: unit 2, value
- * 1753529375000, which is milliseconds.
- *
- * If a future version changes that, the cross-lane equality check fails loudly on the
- * next run rather than publishing a wrong date - which is the reason the gate exists.
+ * Arrow timestamps arrive already normalised to epoch milliseconds, whatever unit the
+ * schema declares. DuckDB says MICROSECOND and hands over milliseconds; rescaling by
+ * the declared unit put a July 2025 order in January 1970. Observed on duckdb-wasm
+ * 1.33: unit 2, value 1753529375000.
  */
 function toIso(value: unknown): unknown {
   if (value === null || value === undefined) return value;

@@ -24,13 +24,11 @@ export interface LaneSpec {
 }
 
 /**
- * Wraps a lane in the measurement protocol.
+ * Wraps a lane in the measurement protocol, and every lane goes through it.
  *
- * Every lane goes through this function, and that is the point. If each lane timed
- * itself, the six numbers on screen would be six slightly different definitions of
- * "how long it took", and the comparison they are supposed to support would be
- * worthless. Warm-up count, run count, median, p95 and normalisation are decided
- * here, once, for all of them.
+ * Lanes that timed themselves would give six slightly different definitions of "how
+ * long it took". Warm-up count, run count, median, p95 and normalisation are decided
+ * here once, for all of them.
  */
 export function createLane(spec: LaneSpec): Lane {
   return {

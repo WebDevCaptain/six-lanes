@@ -20,14 +20,6 @@ export interface SliceManifest {
 /** Where the slice is served from, relative to the page. */
 export const SLICE_BASE = '/slice';
 
-export async function fetchManifest(): Promise<SliceManifest> {
-  const response = await fetch(`${SLICE_BASE}/manifest.json`);
-  if (!response.ok) {
-    throw new Error(`no slice manifest at ${SLICE_BASE} - run \`pnpm slice\``);
-  }
-  return (await response.json()) as SliceManifest;
-}
-
 /** How a browser lane got ready, and what it cost. */
 export interface Preparation {
   /**
@@ -58,15 +50,11 @@ export interface Transferred {
 /**
  * What a set of URLs cost, from the Resource Timing API.
  *
- * Both sizes matter and they are not the same. `encodedBodySize` is the payload the
- * engine had to load; `transferSize` is what crossed the network, and it collapses to
- * a few hundred bytes of revalidation headers on a second visit. Reporting the
- * transfer alone would claim PGlite downloads 300 bytes.
+ * `encodedBodySize` is the payload the engine loaded; `transferSize` is what crossed
+ * the network, and it collapses to a few hundred bytes of revalidation on a second
+ * visit. Reporting the transfer alone would claim PGlite downloads 300 bytes.
  *
- * Returns undefined when the browser declines to report - an opaque cross-origin
- * response, or a browser without the API - rather than inventing a zero. Same-origin
- * requests to /slice always report, which is one more reason the slice is served by
- * the app itself.
+ * Undefined rather than zero when the browser declines to report.
  */
 export function transferred(match: (url: string) => boolean): Transferred | undefined {
   if (typeof performance === 'undefined' || !performance.getEntriesByType) return undefined;

@@ -10,14 +10,11 @@ import { attachDuckLakeSql, metadataTable } from './lake/ducklake';
 import { discoverParquetFiles } from './lake/raw-lake';
 
 /**
- * `pnpm gaps` - the six things raw Parquet cannot do, demonstrated, then done.
+ * `pnpm gaps` - the six things raw Parquet cannot do, reproduced against a real lake,
+ * then done again through DuckLake.
  *
- * Plan section 6 lists them in a table. A table is easy to nod along to and hard to
- * believe, so this script reproduces each one against a real lake and prints what
- * actually happened, then does the same six things through DuckLake and prints that.
- *
- * Everything runs against a scratch lake under lake/gaps/ and a scratch catalog
- * schema, so it never touches the lake the lanes read.
+ * Runs against a scratch lake and a scratch catalog schema, so it never touches what
+ * the lanes read.
  */
 
 const SCRATCH = join(PATHS.lakeRoot, 'gaps');
@@ -39,8 +36,7 @@ await admin.connect();
 await admin.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
 await admin.end();
 
-// Caches off throughout: these demonstrations change files on disk between queries,
-// and a cached read would show the old bytes and hide the very thing being shown.
+// Caches off: these demonstrations change files between queries.
 const duck = await connectDuckDB({
   path: PATHS.database,
   extensions: ['ducklake', 'postgres'],

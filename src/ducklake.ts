@@ -22,9 +22,11 @@ if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
 }
 
-// A clean rebuild. Dropping the metadata schema orphans the old Parquet, so the data
-// directory goes with it - leaving files behind that no catalog references is the
-// exact failure a catalog exists to prevent.
+/*
+ * A clean rebuild. Dropping the metadata schema orphans the old Parquet, so the data
+ * directory goes with it: files no catalog references are the exact failure a catalog
+ * exists to prevent.
+ */
 const admin = new pg.Client({ connectionString: POSTGRES_URL });
 await admin.connect();
 await admin.query(`DROP SCHEMA IF EXISTS ${DUCKLAKE.metadataSchema} CASCADE`);
@@ -40,10 +42,10 @@ await duck.run(
   }),
 );
 
-// DuckLake writes snappy unless told otherwise. The first build of this lake came out
-// at 25.30 MB against generation 1's 14.95 MB - which is exactly the snappy figure
-// from the Day 2 layout study. A lakehouse layer does not inherit the compression
-// choice, it has its own default, and the difference is 69%.
+/*
+ * DuckLake defaults to snappy, not to whatever generation 1 used. The first build came
+ * out at 25.30 MB against 14.95 MB, exactly the snappy figure from the layout study.
+ */
 await duck.run(`CALL ducklake_set_option('${DUCKLAKE.alias}', 'parquet_compression', 'zstd')`);
 
 console.log('building the DuckLake star...');
@@ -51,15 +53,17 @@ const buildMs = await time(async () => {
   for (const table of Object.values(TABLES)) {
     await duck.run(`CREATE TABLE ${DUCKLAKE.alias}.${table} AS SELECT * FROM ${table} LIMIT 0`);
   }
-  // Partitioning must be declared before the rows arrive: SET PARTITIONED BY governs
-  // future writes, so partitioning a full table would leave every existing row in one
-  // unpartitioned file. Only the fact is partitioned; the dimensions are small enough
-  // that splitting them would cost more in footers than it saves in pruning.
+  /*
+   * Partitioning must be declared before the rows arrive: SET PARTITIONED BY governs
+   * future writes only. The dimensions stay unpartitioned; splitting them would cost
+   * more in footers than it saves in pruning.
+   */
   await duck.run(`ALTER TABLE ${DUCKLAKE.alias}.${TABLES.fact} SET PARTITIONED BY (month)`);
 
-  // One transaction for all four tables. A warehouse where the fact can be visible
-  // before its dimensions is a warehouse that serves NULL category names for a few
-  // seconds every night.
+  /*
+   * One transaction for all four tables. A fact visible before its dimensions serves
+   * NULL category names for a few seconds every night.
+   */
   await duck.run('BEGIN TRANSACTION');
   for (const table of Object.values(TABLES)) {
     await duck.run(`INSERT INTO ${DUCKLAKE.alias}.${table} SELECT * FROM ${table}`);

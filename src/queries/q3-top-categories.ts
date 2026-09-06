@@ -2,15 +2,12 @@ import { rangeFilter, table } from './dialect';
 import type { QueryDef } from './types';
 
 /**
- * Q3 - top categories by revenue in a window.
+ * Q3 - a star join with a range filter, which is the shape of most real analytical
+ * queries. The lake prunes files before planning the join; the heap runs an index
+ * scan into a hash join. Same answer, very different plans.
  *
- * A star join with a range filter, which is the shape of most real analytical
- * queries. On the lake the range prunes files before the join is planned; on the heap
- * it is an index scan feeding a hash join. Same answer, two very different plans.
- *
- * `ORDER BY ... LIMIT` on an aggregate cannot stop early: every group has to be
- * complete before any of them can be ranked. The LIMIT saves transfer, not work,
- * which is worth knowing before reaching for one as an optimisation.
+ * `ORDER BY ... LIMIT` over an aggregate cannot stop early, since every group must be
+ * complete before any can be ranked. The LIMIT saves transfer, not work.
  */
 export const q3TopCategories: QueryDef = {
   question: 'Top categories by revenue in a date range',

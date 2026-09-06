@@ -80,8 +80,7 @@ describe('Q2 revenue_by_month_filtered', () => {
   });
 
   it('bounds the partition filter inclusively at the top', () => {
-    // `month <` would drop the file holding the last matching rows whenever the
-    // range ends mid-month; pruning may only remove files that cannot match.
+    // `month <` would drop the last matching file when a range ends mid-month.
     expect(q2.build(lake)).toContain('month <=');
   });
 });
@@ -95,8 +94,7 @@ describe('the star', () => {
   });
 
   it('never joins dim_customer on is_current, which would rewrite history', () => {
-    // The SCD2 lookup is by surrogate key. Joining on the natural key and filtering
-    // to the current version reattributes every past order to today's attributes.
+    // Filtering to the current version reattributes past orders to today's values.
     for (const id of QUERY_IDS) {
       const sql = getQuery(id).build(heap);
       if (sql.includes('dim_customer')) expect(sql).not.toContain('is_current');

@@ -77,8 +77,7 @@ describe('arrowRows', () => {
   });
 
   it('reads a timestamp as epoch milliseconds, whatever unit the schema declares', () => {
-    // duckdb-wasm declares TIMESTAMPTZ as MICROSECOND and then hands over
-    // milliseconds. Rescaling by the declared unit put a July 2025 order in 1970.
+    // It declares MICROSECOND and hands over milliseconds; rescaling gave 1970.
     const at = Date.parse('2025-07-26T11:29:35Z');
     const rows = arrowRows(table([{ name: 'at', type: timestamp() }], [{ at }]));
     expect(rows[0]!['at']).toBe('2025-07-26T11:29:35.000Z');

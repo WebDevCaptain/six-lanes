@@ -13,29 +13,21 @@ import type { Row } from '../types';
 import { runRows } from './duckdb';
 
 /**
- * The oracle for lanes D and E.
+ * The oracle for lanes D and E, which hold a slice and so cannot be compared with
+ * lane A directly. Same query, same catalogue, same normaliser, run server-side
+ * against the Parquet the browser downloaded.
  *
- * Lane A answers over the whole dataset; the browser lanes answer over a slice of it,
- * so their rows cannot be compared with lane A's directly. They are compared with
- * this instead: the same query, the same catalogue definition, the same normaliser,
- * run server-side against the very Parquet files the browser downloads.
- *
- * That keeps the correctness gate intact end to end. Lane A checks lane C over the
- * full lake; this checks lanes D and E over the slice; and `pnpm slice` writes both
- * artefacts from one source, so agreement here means all five agree about the data.
+ * Lane A checks lane C over the full lake and this checks D and E over the slice, so
+ * the correctness gate stays intact end to end.
  */
 export interface Reference {
   run(queryId: QueryId, params: QueryParams): Promise<Row[]>;
 }
 
 /**
- * Cached per slice build, not forever.
- *
- * The connection holds views over specific Parquet files by path. Rebuilding the
- * slice replaces those files, and a connection cached across the rebuild answers
- * every query with "No files found that match the pattern" until the server is
- * restarted. The manifest's build timestamp is the cache key, so a rebuild
- * invalidates it on the next request.
+ * Cached per slice build, not forever. The connection holds views over Parquet files
+ * by path, so a connection kept across a rebuild answers every query with "No files
+ * found" until the server restarts. The manifest's timestamp is the cache key.
  */
 interface Cached {
   readonly builtAt: string;
@@ -56,8 +48,7 @@ export async function sliceReference(): Promise<Reference> {
       connection,
       reference: create(connection, manifest),
     };
-    // Best effort: a leaked DuckDB connection is not fatal, but leaking one per
-    // rebuild during a long dev session would be.
+    // Best effort: one leaked connection is survivable, one per rebuild is not.
     void stale?.connection.then((old) => old.disconnectSync()).catch(() => undefined);
   }
 

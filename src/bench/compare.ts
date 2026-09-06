@@ -1,13 +1,9 @@
 import type { LaneResult, Row } from '../types';
 
 /**
- * Plan section 9 rule 1: correctness gates publication.
- *
- * A lane that disagrees with lane A does not get a slower or faster label, it gets
- * no label at all. A benchmark between engines that are computing different things
- * is not a benchmark, and the only defence against that is to check every row of
- * every result on every run rather than to trust that six SQL dialects mean the
- * same thing.
+ * Correctness gates publication: a lane that disagrees with lane A gets no timing at
+ * all. A benchmark between engines computing different things is not a benchmark, and
+ * the only defence is checking every row on every run.
  */
 
 export interface Mismatch {

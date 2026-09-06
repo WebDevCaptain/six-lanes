@@ -53,11 +53,12 @@ export const LAYOUT_VARIANTS: readonly LayoutVariant[] = [
   { factor: 'compression', setting: 'uncompressed', partitionBy: 'month', compression: 'uncompressed' },
   { factor: 'compression', setting: 'snappy', partitionBy: 'month', compression: 'snappy' },
 
-  // The one deliberate exception to one-factor-at-a-time, because the interaction is
-  // the finding. A month partition holds ~42k rows, which is a single row group at
-  // DuckDB's default of 122,880 - and a sort cannot help an engine skip a row group
-  // when the whole file is one row group. Sorting only buys anything once the row
-  // groups are small enough to be skipped.
+  /*
+   * The one deliberate exception to one-factor-at-a-time, because the interaction is
+   * the finding. A month partition holds ~42k rows, a single row group at DuckDB's
+   * default of 122,880, and a sort cannot help an engine skip the only row group
+   * there is.
+   */
   {
     factor: 'interaction',
     setting: 'sorted by category + 10k row groups',
@@ -117,8 +118,7 @@ export async function writeVariant(
   const slug = variantSlug(variant);
   const directory = join(PATHS.study, slug);
   rmSync(directory, { recursive: true, force: true });
-  // PARTITION_BY creates the tree itself; a single-file COPY will not create its
-  // own parent.
+  // PARTITION_BY builds its own tree; a single-file COPY will not create a parent.
   mkdirSync(directory, { recursive: true });
 
   const options = [
@@ -129,9 +129,11 @@ export async function writeVariant(
     'OVERWRITE_OR_IGNORE',
   ];
 
-  // The month column is always projected. With PARTITION_BY it moves into the path
-  // and out of the file; without it, it stays a column - which is itself part of
-  // what the study measures.
+  /*
+   * The month column is always projected. With PARTITION_BY it moves into the path
+   * and out of the file; without it, it stays a column, which is part of what the
+   * study measures.
+   */
   const source = `SELECT *, strftime(order_ts, '%Y-%m') AS month FROM orders${
     variant.orderBy ? ` ORDER BY ${variant.orderBy}` : ''
   }`;

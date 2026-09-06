@@ -7,13 +7,11 @@ import { arrowRows } from './arrow';
 import { SLICE_BASE, transferred, type Preparation, type SliceManifest } from './slice';
 
 /**
- * Lane D - DuckDB compiled to WebAssembly, reading Parquet over HTTP range requests.
+ * Lane D - DuckDB compiled to WebAssembly, reading Parquet over HTTP range requests
+ * with no server in the request path.
  *
- * No server is involved in answering the query. The page fetches byte ranges out of
- * Parquet files on a static host and aggregates them in the tab. That is the whole
- * lakehouse read path, minus the lakehouse: DuckLake's catalog lives in Postgres and
- * a browser cannot reach it, so the file list is resolved server-side and handed
- * over in the manifest.
+ * The lakehouse read path minus the lakehouse: a browser cannot reach DuckLake's
+ * Postgres catalog, so the file list is resolved server-side into the manifest.
  */
 
 export interface BrowserLane extends Lane {
@@ -23,8 +21,7 @@ export interface BrowserLane extends Lane {
 export async function createDuckDBWasmLane(manifest: SliceManifest): Promise<BrowserLane> {
   const startedAt = performance.now();
 
-  // The MVP bundle unless the browser has exception handling and threads; the
-  // selector probes for both and picks what will actually run here.
+  // Probes for exception handling and threads, then picks a bundle that will run.
   const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
   const workerUrl = URL.createObjectURL(
     new Blob([`importScripts("${bundle.mainWorker!}");`], { type: 'text/javascript' }),
@@ -36,8 +33,7 @@ export async function createDuckDBWasmLane(manifest: SliceManifest): Promise<Bro
   URL.revokeObjectURL(workerUrl);
 
   const connection = await database.connect();
-  // The same invariant as every other lane. Without it a February evening order is
-  // reported as March on any machine east of Greenwich.
+  // Same invariant as every lane: without it, month boundaries shift by the host TZ.
   await connection.query(`SET TimeZone='UTC'`);
   const initialiseMs = performance.now() - startedAt;
 
@@ -90,9 +86,11 @@ export async function createDuckDBWasmLane(manifest: SliceManifest): Promise<Bro
       }
       const after = transferred((url) => url.includes(SLICE_BASE))?.bytes ?? 0;
 
-      // Warm runs re-read from DuckDB-WASM's own buffer and move nothing, which is
-      // true and useless; the honest per-query figure is the first fetch, already
-      // counted in `preparation.bytesDownloaded`.
+      /*
+       * Warm runs re-read from DuckDB-WASM's buffer and move nothing, which is true
+       * and useless. The honest figure is the first fetch, already counted in
+       * `preparation.bytesDownloaded`.
+       */
       return after > before ? { bytesRead: after - before } : {};
     },
 

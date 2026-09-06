@@ -28,9 +28,7 @@ afterAll(() => client.end());
 
 describe('referential integrity', () => {
   it('resolves every foreign key', async () => {
-    // Declared as REFERENCES in the DDL, so Postgres has already enforced this.
-    // Asserted anyway, because the lake has no constraints at all and the same rows
-    // are supposed to be in both.
+    // Postgres enforces this; asserted anyway because the lake has no constraints.
     expect(await scalar(`
       SELECT count(*) FROM fact_order_item f
       LEFT JOIN dim_customer c ON c.customer_key = f.customer_key
@@ -52,8 +50,7 @@ describe('referential integrity', () => {
 
 describe('the SCD2 join', () => {
   it('points every fact at the customer version that was valid when the order happened', async () => {
-    // The invariant the whole dimension exists for. A fact joined to the wrong
-    // version is not an error anywhere, it is a slightly different revenue number.
+    // A fact joined to the wrong version is not an error, just different revenue.
     expect(await scalar(`
       SELECT count(*) FROM fact_order_item f
       JOIN dim_customer c ON c.customer_key = f.customer_key
@@ -107,16 +104,14 @@ describe('Type 2 versus Type 1, on the same question', () => {
       WHERE n.segment = 'enterprise'
     `);
 
+    // Same facts, same filter, different totals. Type 1 offers only the second.
     expect(asOfThen).not.toBe(asOfNow);
-    // Same facts, same filter, different totals - and if the dimension were Type 1
-    // the second number would be the only one available.
     const difference = Math.abs(Number(asOfThen) - Number(asOfNow));
     expect(difference).toBeGreaterThan(0);
   });
 
   it('answers a question about a past month with that month\'s segment', async () => {
-    // Take one customer who moved segment mid-history, and check that their earliest
-    // order is booked under the segment they had then, not the one they have now.
+    // Their earliest order must be booked under the segment they had then.
     const row = await client.query<{ then_segment: string; now_segment: string }>(`
       WITH movers AS (
         SELECT customer_id FROM dim_customer
@@ -152,8 +147,7 @@ describe('measure classes', () => {
   });
 
   it('keeps on_hand additive across products but not across days', async () => {
-    // The semi-additive class. Summing a stock level across two days counts the same
-    // physical units twice, and the arithmetic gives no hint that anything is wrong.
+    // Summing a stock level across two days counts the same units twice.
     const days = Number(await scalar('SELECT count(DISTINCT date_key) FROM fact_inventory_snapshot'));
     const today = Number(await scalar(`
       SELECT sum(on_hand) FROM fact_inventory_snapshot
@@ -163,8 +157,7 @@ describe('measure classes', () => {
 
     expect(days).toBeGreaterThan(1);
     expect(today).toBeGreaterThan(0);
-    // Roughly `days` times too large - which is exactly the failure mode, and the
-    // reason a warehouse marks the column rather than trusting people to remember.
+    // Roughly `days` times too large, which is the failure mode this class has.
     expect(everyDay / today).toBeGreaterThan(days * 0.5);
   });
 
@@ -177,8 +170,7 @@ describe('measure classes', () => {
   });
 
   it('produces a meaningless number when unit_price is summed, as documented', async () => {
-    // Not a bug to fix, a class of column to know about. sum(unit_price) is a
-    // perfectly valid SQL expression that answers no question anyone has.
+    // Not a bug: valid SQL that answers no question anyone has.
     const summed = Number(await scalar('SELECT sum(unit_price) FROM fact_order_item'));
     const revenue = Number(await scalar('SELECT sum(revenue) FROM fact_order_item'));
     expect(summed).toBeGreaterThan(0);

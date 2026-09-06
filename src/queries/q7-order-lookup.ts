@@ -2,15 +2,12 @@ import { table } from './dialect';
 import type { QueryDef } from './types';
 
 /**
- * Q7 - the query the row store wins.
+ * Q7 - the query the row store wins. One order, every column, no joins: the cost being
+ * measured is reassembling a whole row, and a dimension lookup would mix that with
+ * the cost of probing an index.
  *
- * One order, every column of it, no joins. Deliberately no joins: the point being
- * measured is how expensive it is to reassemble a whole row, and adding a dimension
- * lookup would mix that with how expensive it is to probe an index.
- *
- * Columns are listed rather than `SELECT *`. The lake's fact table carries an extra
- * `month` partition column that the heap does not, so `*` would mean different things
- * in different lanes and the equality check would be comparing shapes, not values.
+ * Columns are listed rather than `SELECT *` because the lake's fact table carries a
+ * `month` column the heap does not, so `*` would compare shapes rather than values.
  */
 export const q7OrderLookup: QueryDef = {
   question: 'One order and its line items, by id',
