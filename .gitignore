@@ -3,6 +3,7 @@ node_modules/
 dist/
 out/
 *.tsbuildinfo
+tsconfig.tsbuildinfo
 .DS_Store
 .env
 .env.local
@@ -16,3 +17,4 @@ lake/study/
 public/slice/
 .next/
 next-env.d.ts
+.DS_Store
