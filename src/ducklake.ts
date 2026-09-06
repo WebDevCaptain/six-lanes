@@ -6,30 +6,25 @@ import { formatBytes, formatCount, formatMs } from './bench/table.js';
 import { LAKE_BASE_URL, LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
 import { connectDuckDB, scalar } from './duckdb/connect.js';
 import { createProfiler } from './duckdb/profile.js';
-import {
-  DUCKLAKE,
-  DUCKLAKE_EXTENSIONS,
-  DUCKLAKE_RELATION,
-  attachDuckLakeSql,
-  metadataTable,
-} from './lake/ducklake.js';
+import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql, metadataTable } from './lake/ducklake.js';
 import { discoverParquetFiles, totalBytes, waitForLakeFiles } from './lake/raw-lake.js';
+import { TABLES } from './queries/dialect.js';
 
 /**
  * `pnpm ducklake` - builds generation 2 of the lake and proves it is portable.
  *
  * Same Parquet, same partitioning, same compression as generation 1. The only thing
- * that changes is that a Postgres table now knows which files make up the table, and
- * that turns out to change what is possible: transactions, history, schema evolution,
- * and reading the lake from a URL it was never written to.
+ * that changes is that a Postgres table now knows which files make up each table, and
+ * that turns out to change what is possible: transactions across tables, history,
+ * schema evolution, and reading the lake from a URL it was never written to.
  */
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
 }
 
-// A clean rebuild. Dropping the metadata schema orphans the old Parquet, so the
-// data directory goes with it - leaving one behind would leave files no catalog
-// references, which is the exact failure mode a catalog exists to prevent.
+// A clean rebuild. Dropping the metadata schema orphans the old Parquet, so the data
+// directory goes with it - leaving files behind that no catalog references is the
+// exact failure a catalog exists to prevent.
 const admin = new pg.Client({ connectionString: POSTGRES_URL });
 await admin.connect();
 await admin.query(`DROP SCHEMA IF EXISTS ${DUCKLAKE.metadataSchema} CASCADE`);
@@ -45,54 +40,70 @@ await duck.run(
   }),
 );
 
-/** Every column plus the partition key, which is how generation 1 is written too. */
-const projection = `SELECT *, strftime(order_ts, '%Y-%m') AS month FROM orders`;
-
-// DuckLake writes snappy unless told otherwise, and the first build of this lake
-// came out at 25.30 MB against generation 1's 14.95 MB - which is exactly the snappy
-// figure from the Day 2 layout study. The lakehouse layer does not inherit the
-// compression choice, it has its own default, and the difference is 69%.
+// DuckLake writes snappy unless told otherwise. The first build of this lake came out
+// at 25.30 MB against generation 1's 14.95 MB - which is exactly the snappy figure
+// from the Day 2 layout study. A lakehouse layer does not inherit the compression
+// choice, it has its own default, and the difference is 69%.
 await duck.run(`CALL ducklake_set_option('${DUCKLAKE.alias}', 'parquet_compression', 'zstd')`);
 
-console.log('building the DuckLake table...');
+console.log('building the DuckLake star...');
 const buildMs = await time(async () => {
+  for (const table of Object.values(TABLES)) {
+    await duck.run(`CREATE TABLE ${DUCKLAKE.alias}.${table} AS SELECT * FROM ${table} LIMIT 0`);
+  }
   // Partitioning must be declared before the rows arrive: SET PARTITIONED BY governs
-  // future writes, so creating the table full and partitioning it afterwards would
-  // leave every existing row in one unpartitioned file.
-  await duck.run(`CREATE TABLE ${DUCKLAKE_RELATION} AS ${projection} LIMIT 0`);
-  await duck.run(`ALTER TABLE ${DUCKLAKE_RELATION} SET PARTITIONED BY (month)`);
-  await duck.run(`INSERT INTO ${DUCKLAKE_RELATION} ${projection}`);
+  // future writes, so partitioning a full table would leave every existing row in one
+  // unpartitioned file. Only the fact is partitioned; the dimensions are small enough
+  // that splitting them would cost more in footers than it saves in pruning.
+  await duck.run(`ALTER TABLE ${DUCKLAKE.alias}.${TABLES.fact} SET PARTITIONED BY (month)`);
+
+  // One transaction for all four tables. A warehouse where the fact can be visible
+  // before its dimensions is a warehouse that serves NULL category names for a few
+  // seconds every night.
+  await duck.run('BEGIN TRANSACTION');
+  for (const table of Object.values(TABLES)) {
+    await duck.run(`INSERT INTO ${DUCKLAKE.alias}.${table} SELECT * FROM ${table}`);
+  }
+  await duck.run('COMMIT');
 });
 
-const catalog = await duck.runAndReadAll(`
-  SELECT count(*)::BIGINT           AS files,
-         sum(record_count)::BIGINT  AS records,
-         sum(file_size_bytes)::BIGINT AS bytes
-  FROM ${metadataTable('ducklake_data_file')}
+const perTable = await duck.runAndReadAll(`
+  SELECT t.table_name                    AS name,
+         count(*)::BIGINT                AS files,
+         sum(f.record_count)::BIGINT     AS records,
+         sum(f.file_size_bytes)::BIGINT  AS bytes
+  FROM ${metadataTable('ducklake_data_file')} f
+  JOIN ${metadataTable('ducklake_table')} t ON t.table_id = f.table_id
+  WHERE f.end_snapshot IS NULL
+  GROUP BY t.table_name
+  ORDER BY 4 DESC
 `);
-const summary = catalog.getRowObjectsJson()[0] as Record<string, string>;
 
-console.log(`  ${formatCount(Number(summary['files']))} files, ${formatCount(Number(summary['records']))} rows, ${formatBytes(Number(summary['bytes']))}, ${buildMs}`);
-console.log(`  catalog: ${DUCKLAKE.metadataSchema} schema in Postgres, ${await catalogTableCount()} tables`);
-console.log(`  snapshots: ${await scalar(duck, `SELECT count(*) FROM ${DUCKLAKE.alias}.snapshots()`)}`);
+console.log(`  built in ${buildMs}`);
+for (const row of perTable.getRowObjectsJson() as Record<string, string>[]) {
+  console.log(
+    `  ${String(row['name']).padEnd(18)}${formatCount(Number(row['files'])).padStart(4)} files  ${formatCount(Number(row['records'])).padStart(11)} rows  ${formatBytes(Number(row['bytes'])).padStart(10)}`,
+  );
+}
+console.log(`  catalog           ${await catalogTableCount()} tables in the "${DUCKLAKE.metadataSchema}" schema in Postgres`);
+console.log(`  snapshots         ${await scalar(duck, `SELECT count(*) FROM ${DUCKLAKE.alias}.snapshots()`)}`);
 
 // The property the whole deployment story rests on.
-const relative = await scalar<string>(
+const absolute = await scalar<string>(
   duck,
   `SELECT count(*) FROM ${metadataTable('ducklake_data_file')} WHERE NOT path_is_relative`,
 );
-console.log(`  paths stored relative to DATA_PATH: ${relative === '0' ? 'all of them' : `NO - ${relative} absolute`}`);
+console.log(`  paths relative to DATA_PATH: ${absolute === '0' ? 'all of them' : `NO - ${absolute} absolute`}`);
 
-console.log('\ncomparing the two generations on the same question...');
-const raw = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
-const duckLakeFiles = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.duckLake);
-await waitForLakeFiles(LAKE_BASE_URL, duckLakeFiles);
+console.log('\nre-attaching the same catalog against an HTTP data path...');
+const files = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.duckLake);
+await waitForLakeFiles(LAKE_BASE_URL, files);
 
 const overHttp = await connectDuckDB({ extensions: [...DUCKLAKE_EXTENSIONS], disableCaches: true });
 await overHttp.run(
   attachDuckLakeSql({
     alias: DUCKLAKE.alias,
-    // The same catalog, pointed somewhere else entirely. Nothing is rewritten.
+    // The same catalog, pointed somewhere else entirely. Nothing was rewritten.
     dataPath: `${LAKE_BASE_URL}/${LAKE_DIRS.duckLake}`,
     metadataSchema: DUCKLAKE.metadataSchema,
     overrideDataPath: true,
@@ -101,26 +112,25 @@ await overHttp.run(
 );
 
 const profiler = await createProfiler(overHttp);
-const q1 = `SELECT category, sum(revenue) FROM ${DUCKLAKE_RELATION} GROUP BY 1`;
-const q2 = `SELECT month, sum(revenue) FROM ${DUCKLAKE_RELATION} WHERE month = '2025-03' GROUP BY 1`;
+const fact = `${DUCKLAKE.alias}.${TABLES.fact}`;
+const product = `${DUCKLAKE.alias}.${TABLES.product}`;
 
-console.log(`  gen 1, raw Parquet:  ${formatCount(raw.length)} files, ${formatBytes(totalBytes(raw))} on disk`);
-console.log(`  gen 2, DuckLake:     ${formatCount(duckLakeFiles.length)} files, ${formatBytes(totalBytes(duckLakeFiles))} on disk`);
-console.log(`  read over HTTP with an overridden DATA_PATH:`);
-console.log(`    revenue by category   ${describe(await profiler.measure(q1, []))}`);
-console.log(`    one month, pruned     ${describe(await profiler.measure(q2, []))}`);
-
-const rows = await overHttp.runAndReadAll(q1);
-console.log(`\n  answer from the re-pointed lake: ${rows.getRowObjectsJson().length} categories`);
-console.log(`  DATA_PATH used: ${LAKE_BASE_URL}/${LAKE_DIRS.duckLake}/`);
+console.log(`  DATA_PATH  ${LAKE_BASE_URL}/${LAKE_DIRS.duckLake}/`);
+console.log(`  on disk    ${formatBytes(totalBytes(files))} across ${files.length} files`);
+console.log(`  star join, all history   ${describe(await profiler.measure(
+  `SELECT p.category, sum(f.revenue) FROM ${fact} f JOIN ${product} p ON p.product_key = f.product_key GROUP BY 1`, []))}`);
+console.log(`  one month, pruned        ${describe(await profiler.measure(
+  `SELECT month, sum(revenue) FROM ${fact} WHERE month = '2025-03' GROUP BY 1`, []))}`);
+console.log(`  point lookup by order_id ${describe(await profiler.measure(
+  `SELECT count(*) FROM ${fact} WHERE order_id = 250000`, []))}`);
 
 overHttp.disconnectSync();
 duck.disconnectSync();
 
-console.log('\nlane C now reads lake.orders through the catalog. `pnpm compare` to confirm it still agrees with lane A.');
+console.log('\nlane C reads this. `pnpm compare` to confirm it still agrees with lane A.');
 
 function describe(summary: { bytesRead: number; filesRead: number; rowsScanned: number }): string {
-  return `${formatBytes(summary.bytesRead).padStart(9)}  ${formatCount(summary.filesRead)} files  ${formatCount(summary.rowsScanned)} rows`;
+  return `${formatBytes(summary.bytesRead).padStart(9)}  ${String(summary.filesRead).padStart(3)} files  ${formatCount(summary.rowsScanned).padStart(9)} rows`;
 }
 
 async function catalogTableCount(): Promise<number> {

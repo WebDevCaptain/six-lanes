@@ -58,7 +58,7 @@ describe.each(QUERY_IDS)('%s', (queryId) => {
 
   it('shows the SQL it ran', () => {
     for (const result of results.get(queryId)!) {
-      expect(result.sql).toMatch(/^SELECT/);
+      expect(result.sql).toMatch(/^(SELECT|WITH)\b/);
       expect(result.sql).not.toContain('undefined');
     }
   });
@@ -79,9 +79,11 @@ describe('the argument the project is making', () => {
     expect(wall('revenue_by_category', 'duckdb-lake')).toBeLessThan(wall('revenue_by_category', 'postgres'));
   });
 
-  it('Q1: only the two columns the query mentions are read', () => {
+  it('Q1: reads three columns of thirteen, and not one more', () => {
+    // `product_key` joins the star, `revenue` is summed, `category` is the grouping.
+    // Everything else in the fact table and the product dimension is skipped.
     const lake = results.get('revenue_by_category')!.find((r) => r.laneId === 'duckdb-lake')!;
-    expect(lake.metrics.columnsProjected).toEqual(['category', 'revenue']);
+    expect(lake.metrics.columnsProjected).toEqual(['category', 'product_key', 'revenue']);
   });
 
   it('Q2: partition pruning opens fewer files than the lake holds', () => {
@@ -114,7 +116,11 @@ describe('lane B: what federation pushes down and what it drags over the wire', 
     results.get(queryId)!.find((r) => r.laneId === 'duckdb-postgres')!;
 
   it('pushes the projection down: only the columns the query names cross the wire', () => {
-    expect(laneB('revenue_by_category').metrics.columnsProjected).toEqual(['category', 'revenue']);
+    expect(laneB('revenue_by_category').metrics.columnsProjected).toEqual([
+      'category',
+      'product_key',
+      'revenue',
+    ]);
   });
 
   it('pushes the date range down, so Postgres does the filtering', () => {

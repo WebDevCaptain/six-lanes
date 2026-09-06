@@ -23,7 +23,8 @@
     "study": "tsx src/study.ts",
     "ducklake": "tsx src/ducklake.ts",
     "gaps": "tsx src/gaps.ts",
-    "setup": "pnpm up && pnpm generate && pnpm load && pnpm ducklake"
+    "setup": "pnpm up && pnpm generate && pnpm load && pnpm ducklake",
+    "measures": "tsx src/measures.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.5-r.4",

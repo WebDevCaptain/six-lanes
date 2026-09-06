@@ -7,11 +7,14 @@ import { createProfiler, type DuckDBProfiler } from '../../src/duckdb/profile.js
 import {
   DUCKLAKE,
   DUCKLAKE_EXTENSIONS,
-  DUCKLAKE_RELATION,
   attachDuckLakeSql,
   metadataTable,
 } from '../../src/lake/ducklake.js';
+import { TABLES } from '../../src/queries/dialect.js';
 import { discoverParquetFiles } from '../../src/lake/raw-lake.js';
+
+const FACT = `${DUCKLAKE.alias}.${TABLES.fact}`;
+const PRODUCT = `${DUCKLAKE.alias}.${TABLES.product}`;
 
 /**
  * What the catalog buys, asserted.
@@ -83,7 +86,9 @@ describe('the catalog', () => {
 
 describe('reading the lake from somewhere it was never written', () => {
   it('answers the same question over HTTP as it does on disk', async () => {
-    const query = `SELECT category, sum(revenue) AS revenue FROM ${DUCKLAKE_RELATION} GROUP BY 1 ORDER BY 1`;
+    const query = `SELECT p.category, sum(f.revenue) AS revenue
+                   FROM ${FACT} f JOIN ${PRODUCT} p ON p.product_key = f.product_key
+                   GROUP BY 1 ORDER BY 1`;
     const fromDisk = (await local.runAndReadAll(query)).getRowObjectsJson();
     const fromHttp = (await remote.runAndReadAll(query)).getRowObjectsJson();
 
@@ -93,7 +98,7 @@ describe('reading the lake from somewhere it was never written', () => {
 
   it('prunes to one file for one month, using catalog statistics', async () => {
     const summary = await profiler.measure(
-      `SELECT sum(revenue) FROM ${DUCKLAKE_RELATION} WHERE month = '2025-03'`,
+      `SELECT sum(revenue) FROM ${FACT} WHERE month = '2025-03'`,
       [],
     );
     expect(summary.filesRead).toBe(1);
@@ -103,7 +108,7 @@ describe('reading the lake from somewhere it was never written', () => {
     // order_id is not the partition key. The catalog's per-file min/max on it still
     // eliminates 23 of 24 files, and does so before opening a single Parquet footer.
     const summary = await profiler.measure(
-      `SELECT count(*) FROM ${DUCKLAKE_RELATION} WHERE order_id = 250000`,
+      `SELECT count(*) FROM ${FACT} WHERE order_id = 250000`,
       [],
     );
     expect(summary.filesRead).toBe(1);
@@ -118,12 +123,12 @@ describe('time travel', () => {
     const ids = snapshots.getRowsJson().map(([id]) => Number(id));
     expect(ids.length).toBeGreaterThan(1);
 
-    const current = await scalar<string>(local, `SELECT count(*) FROM ${DUCKLAKE_RELATION}`);
+    const current = await scalar<string>(local, `SELECT count(*) FROM ${FACT}`);
     const empty = await scalar<string>(
       local,
       // Snapshot N is the state *after* operation N. The table is created empty and
       // filled by a later insert, so an early version has no rows in it.
-      `SELECT count(*) FROM ${DUCKLAKE_RELATION} AT (VERSION => ${ids[1]})`,
+      `SELECT count(*) FROM ${FACT} AT (VERSION => ${ids[1]})`,
     );
 
     expect(Number(current)).toBeGreaterThan(0);

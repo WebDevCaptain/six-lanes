@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, QUERIES, QUERY_IDS, getQuery } from '../../src/queries/index.js';
 import type { SqlTarget } from '../../src/queries/types.js';
 
-const heap: SqlTarget = { dialect: 'postgres', relation: 'orders', partitioned: false };
-const lake: SqlTarget = { dialect: 'duckdb', relation: 'lake_orders', partitioned: true };
-const federated: SqlTarget = { dialect: 'duckdb', relation: 'pg.orders', partitioned: false };
+const heap: SqlTarget = { dialect: 'postgres', schema: '', partitioned: false };
+const lake: SqlTarget = { dialect: 'duckdb', schema: 'lake.', partitioned: true };
+const federated: SqlTarget = { dialect: 'duckdb', schema: 'pg.', partitioned: false };
 
 describe('the catalogue', () => {
   it('registers every query under its own id', () => {
@@ -15,7 +15,7 @@ describe('the catalogue', () => {
   it('builds a statement for every query against every target', () => {
     for (const id of QUERY_IDS) {
       for (const target of [heap, lake, federated]) {
-        expect(getQuery(id).build(target)).toContain(target.relation);
+        expect(getQuery(id).build(target)).toContain(`${target.schema}fact_order_item`);
       }
     }
   });
@@ -42,17 +42,21 @@ describe('the catalogue', () => {
 });
 
 describe('Q1 revenue_by_category', () => {
-  it('is the same statement in both dialects', () => {
-    const a = getQuery('revenue_by_category').build({ ...heap, relation: 'x' });
-    const b = getQuery('revenue_by_category').build({ ...lake, relation: 'x' });
+  it('is the same statement in both dialects, given the same schema', () => {
+    const a = getQuery('revenue_by_category').build({ ...heap, schema: 'x.' });
+    const b = getQuery('revenue_by_category').build({ ...lake, schema: 'x.', partitioned: false });
     expect(a).toBe(b);
   });
 
-  it('reads only the two columns it needs', () => {
+  it('names only the columns it needs', () => {
     const sql = getQuery('revenue_by_category').build(heap);
-    for (const unused of ['order_ts', 'customer_id', 'unit_price', 'cost']) {
+    for (const unused of ['order_ts', 'customer_key', 'unit_price', 'cost']) {
       expect(sql).not.toContain(unused);
     }
+  });
+
+  it('joins the product dimension, because category no longer lives on the fact', () => {
+    expect(getQuery('revenue_by_category').build(heap)).toContain('dim_product');
   });
 });
 
@@ -66,19 +70,65 @@ describe('Q2 revenue_by_month_filtered', () => {
 
   it('keeps the exact order_ts bounds in every variant, so pruning cannot change the answer', () => {
     for (const target of [heap, lake, federated]) {
-      expect(q2.build(target)).toContain('order_ts >=');
-      expect(q2.build(target)).toContain('order_ts <');
+      expect(q2.build(target)).toContain('f.order_ts >=');
+      expect(q2.build(target)).toContain('f.order_ts <');
     }
   });
 
   it('derives the month itself when the relation has no partition column', () => {
-    expect(q2.build(federated)).toContain("strftime(order_ts, '%Y-%m')");
+    expect(q2.build(federated)).toContain("strftime(f.order_ts, '%Y-%m')");
   });
 
   it('bounds the partition filter inclusively at the top', () => {
     // `month <` would drop the file holding the last matching rows whenever the
     // range ends mid-month; pruning may only remove files that cannot match.
     expect(q2.build(lake)).toContain('month <=');
+  });
+});
+
+describe('the star', () => {
+  it('joins every dimension somewhere in the catalogue', () => {
+    const everySql = QUERY_IDS.map((id) => getQuery(id).build(heap)).join('\n');
+    for (const dimension of ['dim_product', 'dim_customer', 'dim_date']) {
+      expect(everySql).toContain(dimension);
+    }
+  });
+
+  it('never joins dim_customer on is_current, which would rewrite history', () => {
+    // The SCD2 lookup is by surrogate key. Joining on the natural key and filtering
+    // to the current version reattributes every past order to today's attributes.
+    for (const id of QUERY_IDS) {
+      const sql = getQuery(id).build(heap);
+      if (sql.includes('dim_customer')) expect(sql).not.toContain('is_current');
+    }
+  });
+
+  it('never sums unit_price, which is non-additive', () => {
+    for (const id of QUERY_IDS) {
+      expect(getQuery(id).build(heap)).not.toMatch(/sum\(\s*\w*\.?unit_price/);
+    }
+  });
+});
+
+describe('Q4 rolling_revenue', () => {
+  const q4 = getQuery('rolling_revenue');
+
+  it('drives the calendar from dim_date, not from the facts', () => {
+    // A window of 29 preceding ROWS is only a 29-day window if every day has a row.
+    expect(q4.build(heap)).toContain('LEFT JOIN');
+    expect(q4.build(heap)).toContain('dim_date');
+  });
+
+  it('zero-fills days with no orders', () => {
+    expect(q4.build(heap)).toContain('coalesce(sum(f.revenue), 0)');
+  });
+});
+
+describe('Q5 repeat_rate', () => {
+  it('counts customer_id, not customer_key: one person, not one SCD2 version', () => {
+    const sql = getQuery('repeat_rate').build(heap);
+    expect(sql).toContain('c.customer_id');
+    expect(sql).toMatch(/GROUP BY month, c\.customer_id/);
   });
 });
 

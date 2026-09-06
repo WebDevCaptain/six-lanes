@@ -38,11 +38,11 @@ export async function createPostgresLane(options: PostgresLaneOptions): Promise<
     id: options.id,
     label: options.label,
     handicaps: options.handicaps ?? [],
-    target: { dialect: 'postgres', relation: 'orders', partitioned: false },
+    target: { dialect: 'postgres', schema: '', partitioned: false },
 
     available: async () => {
       try {
-        await client.query('SELECT 1 FROM orders LIMIT 1');
+        await client.query('SELECT 1 FROM fact_order_item LIMIT 1');
         return true;
       } catch {
         return false;

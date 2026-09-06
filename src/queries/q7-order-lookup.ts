@@ -1,17 +1,16 @@
+import { table } from './dialect.js';
 import type { QueryDef } from './types.js';
 
 /**
  * Q7 - the query the row store wins.
  *
- * One order, every column of it. A b-tree on `order_id` takes Postgres straight to
- * a handful of tuples; the column store has to touch every column chunk in every
- * file, because `order_id` says nothing about which file a row is in. A comparison
- * that never loses is marketing, and this is why this one is not.
+ * One order, every column of it, no joins. Deliberately no joins: the point being
+ * measured is how expensive it is to reassemble a whole row, and adding a dimension
+ * lookup would mix that with how expensive it is to probe an index.
  *
- * Columns are listed explicitly rather than `SELECT *`. The lake carries an extra
- * `month` partition column that the heap does not, so `*` would mean different
- * things in different lanes and the equality check would be comparing shapes rather
- * than values.
+ * Columns are listed rather than `SELECT *`. The lake's fact table carries an extra
+ * `month` partition column that the heap does not, so `*` would mean different things
+ * in different lanes and the equality check would be comparing shapes, not values.
  */
 export const q7OrderLookup: QueryDef = {
   question: 'One order and its line items, by id',
@@ -20,10 +19,10 @@ export const q7OrderLookup: QueryDef = {
     { name: 'order_item_id', type: 'int' },
     { name: 'order_id', type: 'int' },
     { name: 'order_ts', type: 'timestamp' },
-    { name: 'customer_id', type: 'int' },
-    { name: 'product_id', type: 'int' },
+    { name: 'date_key', type: 'int' },
+    { name: 'customer_key', type: 'int' },
+    { name: 'product_key', type: 'int' },
     { name: 'channel', type: 'text' },
-    { name: 'category', type: 'text' },
     { name: 'quantity', type: 'int' },
     { name: 'unit_price', type: 'money' },
     { name: 'discount_amount', type: 'money' },
@@ -33,20 +32,20 @@ export const q7OrderLookup: QueryDef = {
 
   bind: ({ orderId }) => [orderId],
 
-  build: ({ relation }) => `
+  build: (target) => `
 SELECT order_item_id,
        order_id,
        order_ts,
-       customer_id,
-       product_id,
+       date_key,
+       customer_key,
+       product_key,
        channel,
-       category,
        quantity,
        unit_price,
        discount_amount,
        revenue,
        cost
-FROM ${relation}
+FROM ${table(target, 'fact')}
 WHERE order_id = $1
 ORDER BY order_item_id
 `.trim(),

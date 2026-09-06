@@ -2,29 +2,36 @@ import { existsSync, rmSync } from 'node:fs';
 
 import pg from 'pg';
 
-import { formatBytes } from './bench/table.js';
-import { DATASET, LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
+import { formatBytes, formatMs } from './bench/table.js';
+import { LAKE_DIRS, PATHS, POSTGRES_URL } from './config.js';
 import { connectDuckDB } from './duckdb/connect.js';
 import { discoverParquetFiles, totalBytes } from './lake/raw-lake.js';
 import { toLibpqConnectionString } from './postgres/connection.js';
 import { readSqlFile } from './sql-files.js';
 
 /**
- * `pnpm load` - projects data/olap.duckdb into the two stores the lanes read.
+ * `pnpm load` - projects data/olap.duckdb into the stores the lanes read.
  *
- *   lake/raw/month=YYYY-MM/*.parquet   the column store
- *   Postgres `orders`                  the row store
+ *   Postgres        the star schema: lane A, and the host of DuckLake's catalog
+ *   lake/raw/       generation 1 of the lake, written from the flat `orders` table
  *
- * Both come from the same DuckDB file, in one process, so there is no window in
- * which the two disagree about what the dataset is.
+ * Generation 2 is built separately by `pnpm ducklake`, because its catalog lives in
+ * Postgres and so Postgres has to exist first.
+ *
+ * The raw lake is still written from `orders` rather than from the fact table, on
+ * purpose: it is the Day 1 and Day 2 artefact, and rewriting it against the star
+ * would invalidate every layout-study number in docs/results.md.
  */
 if (!existsSync(PATHS.database)) {
   throw new Error(`${PATHS.database} not found - run \`pnpm generate\` first`);
 }
 
+/** Dimensions before the fact: the fact's foreign keys point at them. */
+const DIMENSIONS = ['dim_date', 'dim_customer', 'dim_product'] as const;
+
 const duck = await connectDuckDB({ path: PATHS.database, extensions: ['postgres'] });
 
-console.log('writing the Parquet lake...');
+console.log('writing the raw Parquet lake (generation 1)...');
 const lakeMs = await time(async () => {
   // Removed rather than overwritten: OVERWRITE_OR_IGNORE replaces the partitions it
   // is given and silently leaves behind any it is not, so a smaller regeneration
@@ -37,60 +44,51 @@ const lakeMs = await time(async () => {
 });
 
 const partitions = discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw);
-console.log(
-  `  ${partitions.length} partitions, ${formatBytes(totalBytes(partitions))} on disk, ${lakeMs}\n`,
-);
+console.log(`  ${partitions.length} partitions, ${formatBytes(totalBytes(partitions))}, ${lakeMs}\n`);
 
-console.log('loading Postgres...');
+console.log('loading the star into Postgres...');
 const client = new pg.Client({ connectionString: POSTGRES_URL });
 await client.connect();
 await client.query(`SET TimeZone = 'UTC'`);
 
 // DDL through the Postgres client, not through DuckDB's ATTACH: the schema is
-// Postgres' own - PRIMARY KEY, NUMERIC(12,2), its index definitions - and running
-// it verbatim keeps it out of a type translation layer.
-await client.query(readSqlFile('01_schema.postgres.sql'));
+// Postgres' own - PRIMARY KEY, REFERENCES, NUMERIC(12,2) - and running it verbatim
+// keeps it out of a type translation layer.
+await client.query(readSqlFile('03_star.postgres.sql'));
 
 const insertMs = await time(async () => {
   await duck.run(`ATTACH '${toLibpqConnectionString(POSTGRES_URL)}' AS pg (TYPE postgres)`);
-  await duck.run(`INSERT INTO pg.orders SELECT * FROM orders`);
+  for (const table of DIMENSIONS) await duck.run(`INSERT INTO pg.${table} SELECT * FROM ${table}`);
+  // `month` exists only in the lake copy, as its Hive partition key. The heap has no
+  // partitions, so storing it would be megabytes of redundant text.
+  await duck.run(`INSERT INTO pg.fact_order_item SELECT * EXCLUDE (month) FROM fact_order_item`);
   await duck.run(`DETACH pg`);
 });
-console.log(`  ${(await countOrders(client)).toLocaleString()} rows inserted, ${insertMs}`);
+console.log(`  rows inserted, ${insertMs}`);
 
-const tuneMs = await time(() => client.query(readSqlFile('02_tune.postgres.sql')));
-console.log(`  indexes, statistics and ANALYZE, ${tuneMs}`);
+const tuneMs = await time(() => client.query(readSqlFile('04_tune_star.postgres.sql')));
+console.log(`  indexes, statistics and ANALYZE, ${tuneMs}\n`);
 
-const sizes = await client.query<{ total: string; heap: string }>(`
-  SELECT pg_size_pretty(pg_total_relation_size('orders')) AS total,
-         pg_size_pretty(pg_table_size('orders'))          AS heap
+const sizes = await client.query<{ table: string; rows: string; total: string }>(`
+  SELECT c.relname                                     AS table,
+         to_char(c.reltuples, 'FM999,999,999')         AS rows,
+         pg_size_pretty(pg_total_relation_size(c.oid)) AS total
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relkind = 'r'
+  ORDER BY pg_total_relation_size(c.oid) DESC
 `);
-console.log(`  ${sizes.rows[0]!.total} total, ${sizes.rows[0]!.heap} heap\n`);
-
-console.log(`lake  ${formatBytes(totalBytes(partitions))} across ${partitions.length} files`);
-console.log(`heap  ${sizes.rows[0]!.heap}`);
-console.log(`ratio ${(bytesOf(sizes.rows[0]!.heap) / totalBytes(partitions)).toFixed(1)}x`);
-console.log(`\nserved at ${DATASET.orderItems.toLocaleString()} rows; run \`pnpm compare\` next`);
+for (const row of sizes.rows) {
+  console.log(`  ${row.table.padEnd(18)}${row.rows.padStart(12)} rows   ${row.total}`);
+}
 
 await client.end();
 duck.disconnectSync();
 
-async function countOrders(client: pg.Client): Promise<number> {
-  const result = await client.query<{ count: string }>('SELECT count(*) AS count FROM orders');
-  return Number(result.rows[0]!.count);
-}
+console.log('\nnext: `pnpm ducklake` to build generation 2, then `pnpm compare`');
 
 async function time(fn: () => Promise<unknown>): Promise<string> {
   const started = performance.now();
   await fn();
-  return `${((performance.now() - started) / 1000).toFixed(2)}s`;
-}
-
-/** Parses `pg_size_pretty` output back to bytes, for the one ratio printed above. */
-function bytesOf(pretty: string): number {
-  const [value = '0', unit = 'bytes'] = pretty.split(' ');
-  const scale: Record<string, number> = {
-    bytes: 1, kB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4,
-  };
-  return Number(value) * (scale[unit] ?? 1);
+  return formatMs(performance.now() - started);
 }

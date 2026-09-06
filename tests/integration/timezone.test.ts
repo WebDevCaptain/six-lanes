@@ -75,7 +75,7 @@ describe('Postgres and DuckDB', () => {
     // 24 months of actual data, counted both ways.
     const fromPostgres = await client.query<{ month: string; n: string }>(`
       SELECT to_char(order_ts AT TIME ZONE 'UTC', 'YYYY-MM') AS month, count(*)::text AS n
-      FROM orders GROUP BY 1 ORDER BY 1
+      FROM fact_order_item GROUP BY 1 ORDER BY 1
     `);
     const fromDuckDB = await duck.runAndReadAll(`
       SELECT strftime(order_ts, '%Y-%m') AS month, count(*)::VARCHAR AS n

@@ -517,3 +517,35 @@ Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000
 | order_lookup | C  DuckDB over the lake | 4.024 | 4.911 | - | 970.3 KB | 3 | 3 | 24 |
 
 5 timed runs per cell after 1 warm-up; median and p95, never a mean.
+
+### 2026-09-06 05:24 UTC - 1,000,000 line items
+
+`Apple M5, 10 cores, 16 GB, darwin 25.6.0, node v24.18.0, measured 2026-09-06`
+
+Parameters: `from=2025-03-01T00:00:00Z  to=2025-09-01T00:00:00Z  order_id=250000`
+
+| query | lane | median | p95 | engine | bytes read | rows scanned | returned | files |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| revenue_by_category | A  Postgres 18 | 43.79 | 46.16 | 46.15 | 107.84 MB | 1,015,000 | 8 | - |
+| revenue_by_category | B  DuckDB over Postgres | 50.66 | 229.47 | - | - | 1,005,000 | 8 | - |
+| revenue_by_category | C  DuckDB over the lake | 8.015 | 8.341 | - | 3.72 MB | 1,005,000 | 8 | 25 |
+| revenue_by_month_filtered | A  Postgres 18 | 19.74 | 21.58 | 21.16 | 29.83 MB | 237,171 | 6 | - |
+| revenue_by_month_filtered | B  DuckDB over Postgres | 25.08 | 26.99 | - | - | 237,171 | 6 | - |
+| revenue_by_month_filtered | C  DuckDB over the lake | 5.347 | 5.934 | - | 1.01 MB | 237,171 | 6 | 6 |
+| order_lookup | A  Postgres 18 | 0.234 | 0.265 | 0.006 | 32.0 KB | 3 | 3 | - |
+| order_lookup | B  DuckDB over Postgres | 3.218 | 3.288 | - | - | 3 | 3 | - |
+| order_lookup | C  DuckDB over the lake | 4.915 | 5.145 | - | 580.4 KB | 3 | 3 | 1 |
+| top_categories | A  Postgres 18 | 124.70 | 126.35 | 129.36 | 29.84 MB | 242,171 | 5 | - |
+| top_categories | B  DuckDB over Postgres | 34.96 | 36.55 | - | - | 242,171 | 5 | - |
+| top_categories | C  DuckDB over the lake | 10.77 | 11.11 | - | 1.60 MB | 242,171 | 5 | 7 |
+| rolling_revenue | A  Postgres 18 | 26.58 | 27.35 | 29.55 | 29.45 MB | 237,355 | 184 | - |
+| rolling_revenue | B  DuckDB over Postgres | 22.70 | 28.50 | - | - | 237,355 | 184 | - |
+| rolling_revenue | C  DuckDB over the lake | 9.481 | 9.633 | - | 1.01 MB | 237,355 | 184 | 7 |
+| repeat_rate | A  Postgres 18 | 155.24 | 155.73 | 164.13 | 53.20 MB | 477,267 | 6 | - |
+| repeat_rate | B  DuckDB over Postgres | 61.32 | 64.32 | - | - | 477,267 | 6 | - |
+| repeat_rate | C  DuckDB over the lake | 15.11 | 15.43 | - | 1.68 MB | 477,265 | 6 | 7 |
+| category_by_month | A  Postgres 18 | 24.54 | 25.60 | 26.39 | 31.16 MB | 252,171 | 48 | - |
+| category_by_month | B  DuckDB over Postgres | 32.41 | 38.78 | - | - | 242,171 | 48 | - |
+| category_by_month | C  DuckDB over the lake | 9.934 | 10.66 | - | 1.49 MB | 242,171 | 48 | 7 |
+
+5 timed runs per cell after 1 warm-up; median and p95, never a mean.

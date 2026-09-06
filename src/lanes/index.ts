@@ -1,10 +1,5 @@
 import { LAKE_BASE_URL, LAKE_DIRS, POSTGRES_URL } from '../config.js';
-import {
-  DUCKLAKE,
-  DUCKLAKE_EXTENSIONS,
-  DUCKLAKE_RELATION,
-  attachDuckLakeSql,
-} from '../lake/ducklake.js';
+import { DUCKLAKE, DUCKLAKE_EXTENSIONS, attachDuckLakeSql } from '../lake/ducklake.js';
 import { toLibpqConnectionString } from '../postgres/connection.js';
 import type { Lane, LaneId } from '../types.js';
 import { createDuckDBLane } from './duckdb.js';
@@ -34,7 +29,7 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       // READ_ONLY makes the intent explicit: this lane is a reader of somebody
       // else's transactional database and has no business writing to it.
       setup: [`ATTACH '${toLibpqConnectionString(POSTGRES_URL)}' AS pg (TYPE postgres, READ_ONLY)`],
-      relation: 'pg.orders',
+      schema: 'pg.',
       partitioned: false,
       uncachedMetrics: false,
     }),
@@ -49,8 +44,9 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
    * is a connection string change.
    *
    * Note what is gone compared with generation 1: no directory walk, no explicit
-   * list of two dozen URLs, no view to hide them behind. `FROM lake.orders` is the
-   * whole thing, and the file list comes from one transactional metadata query.
+   * list of two dozen URLs, no view to hide them behind. `FROM lake.fact_order_item`
+   * is the whole thing, and the file list comes from one transactional metadata
+   * query.
    */
   'duckdb-lake': () =>
     createDuckDBLane({
@@ -70,7 +66,7 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
           readOnly: true,
         }),
       ],
-      relation: DUCKLAKE_RELATION,
+      schema: `${DUCKLAKE.alias}.`,
       partitioned: true,
       uncachedMetrics: true,
     }),

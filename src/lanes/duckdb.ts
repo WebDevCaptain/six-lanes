@@ -2,6 +2,7 @@ import type { DuckDBConnection } from '@duckdb/node-api';
 
 import { connectDuckDB } from '../duckdb/connect.js';
 import { bindAll, createProfiler } from '../duckdb/profile.js';
+import { TABLES } from '../queries/dialect.js';
 import type { QueryValue } from '../queries/types.js';
 import type { Lane, LaneId } from '../types.js';
 import { createLane, type LaneSpec } from './create-lane.js';
@@ -19,17 +20,8 @@ export interface DuckDBLaneOptions {
   readonly extensions: readonly string[];
   /** Run on every connection before it serves anything, e.g. an ATTACH. */
   readonly setup?: readonly string[];
-  /** What to read. Wrapped in `viewName` when that is set. */
-  readonly relation: string;
-  /**
-   * Hides an unreadable relation behind a name.
-   *
-   * The lake's relation is a `read_parquet` call over two dozen inlined URLs, and
-   * the UI is required to show the exact SQL that ran. A view keeps that promise
-   * honest and legible at the same time; DuckDB inlines views before optimising, so
-   * pruning is unaffected - asserted in tests/integration/pruning.test.ts.
-   */
-  readonly viewName?: string;
+  /** Prefix qualifying the star tables, e.g. `lake.` or `pg.`. */
+  readonly schema: string;
   readonly partitioned: boolean;
   /**
    * Take metrics from a second connection with the caches turned off.
@@ -45,17 +37,17 @@ export async function createDuckDBLane(options: DuckDBLaneOptions): Promise<Lane
   const query = await open(options, false);
   const metrics = options.uncachedMetrics ? await open(options, true) : query;
   const profiler = await createProfiler(metrics);
-  const relation = options.viewName ?? options.relation;
+  const factTable = `${options.schema}${TABLES.fact}`;
 
   const spec: LaneSpec = {
     id: options.id,
     label: options.label,
     handicaps: options.handicaps,
-    target: { dialect: 'duckdb', relation, partitioned: options.partitioned },
+    target: { dialect: 'duckdb', schema: options.schema, partitioned: options.partitioned },
 
     available: async () => {
       try {
-        await query.run(`SELECT 1 FROM ${relation} LIMIT 1`);
+        await query.run(`SELECT 1 FROM ${factTable} LIMIT 1`);
         return true;
       } catch {
         return false;
@@ -94,12 +86,6 @@ async function open(options: DuckDBLaneOptions, forMetrics: boolean): Promise<Du
     disableCaches: forMetrics,
   });
   for (const statement of options.setup ?? []) await connection.run(statement);
-
-  if (options.viewName) {
-    await connection.run(
-      `CREATE OR REPLACE VIEW ${options.viewName} AS SELECT * FROM ${options.relation}`,
-    );
-  }
   return connection;
 }
 

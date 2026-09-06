@@ -9,12 +9,18 @@ export type Dialect = 'postgres' | 'duckdb';
  */
 export interface SqlTarget {
   readonly dialect: Dialect;
-  /** Anything valid in a FROM clause: a table name, or a `read_parquet(...)` call. */
-  readonly relation: string;
   /**
-   * True only for the Parquet lake. When set, Q2 adds a redundant predicate on the
-   * partition key. Redundant for correctness, decisive for I/O - it is what stops
-   * the engine opening 22 of the 24 monthly files.
+   * Qualifies every star table: `''` for the default schema, `'lake.'` for the
+   * DuckLake catalog, `'pg.'` for an attached Postgres.
+   *
+   * A prefix rather than a single relation name, because from Day 4 a query joins
+   * a fact table to its dimensions and needs to address all four.
+   */
+  readonly schema: string;
+  /**
+   * True only for the Parquet lake, whose fact table carries a `month` Hive
+   * partition column. When set, range queries add a redundant predicate on it -
+   * redundant for correctness, decisive for I/O.
    */
   readonly partitioned: boolean;
 }

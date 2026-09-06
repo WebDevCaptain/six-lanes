@@ -5,6 +5,7 @@ import { DATASET, PATHS } from './config.js';
 import { contentFingerprint } from './data/fingerprint.js';
 import { generateDataset } from './data/generator.js';
 import { ingestOrders } from './data/ingest.js';
+import { buildStar } from './data/star.js';
 import { connectDuckDB } from './duckdb/connect.js';
 import { readSqlFile } from './sql-files.js';
 
@@ -31,6 +32,11 @@ const rows = await ingestOrders(connection, generateDataset(DATASET), (soFar) =>
 process.stdout.write(`\r${' '.repeat(40)}\r`);
 
 const fingerprint = await contentFingerprint(connection);
+
+process.stdout.write('  building the star...');
+const star = await buildStar(connection, DATASET);
+process.stdout.write(`\r${' '.repeat(40)}\r`);
+
 connection.disconnectSync();
 
 console.log(`generated ${rows.toLocaleString()} line items in ${elapsed()}`);
@@ -42,6 +48,11 @@ console.log(`  products     ${fingerprint.products.toLocaleString()} of ${DATASE
 console.log(`  revenue      ${fingerprint.revenue}`);
 console.log(`  returns      ${(fingerprint.returnRate * 100).toFixed(2)}% of line items`);
 console.log(`  fingerprint  ${fingerprint.checksum}`);
+console.log(`\nstar schema`);
+console.log(`  dim_date      ${star.dates.toLocaleString()} days`);
+console.log(`  dim_customer  ${star.customerVersions.toLocaleString()} versions of ${star.customers.toLocaleString()} customers (SCD2)`);
+console.log(`  dim_product   ${star.products.toLocaleString()} products`);
+console.log(`  fact          ${star.facts.toLocaleString()} line items`);
 console.log(`\nwrote ${PATHS.database}`);
 
 function elapsed(): string {

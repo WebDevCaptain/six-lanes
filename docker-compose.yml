@@ -23,6 +23,12 @@ services:
       - shared_buffers=256MB
       - -c
       - max_parallel_workers_per_gather=2
+      # Postgres has no hash-based DISTINCT aggregate, so `count(DISTINCT ...)` sorts
+      # its input. At the 4 MB default that sort spilled 8.6 MB to disk on Q3 and Q5.
+      # An analytics workload would raise this, and lane A is the baseline, so it gets
+      # what a competent DBA would give it. Measured either way in docs/results.md.
+      - -c
+      - work_mem=64MB
       # EXPLAIN (ANALYZE, BUFFERS) is how lane A reports bytes read (plan section 9.4).
       - -c
       - track_io_timing=on
