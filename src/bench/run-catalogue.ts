@@ -28,8 +28,7 @@ export async function runCatalogue(
   const rows: MeasuredRow[] = [];
 
   for (const queryId of queryIds) {
-    // Sequential on purpose: lanes share a machine, and running them concurrently
-    // would have them competing for the CPU whose speed is being measured.
+    // Sequential: concurrent lanes would compete for the CPU being measured.
     const results: LaneResult[] = [];
     for (const lane of lanes) results.push(await lane.run(queryId, params));
 

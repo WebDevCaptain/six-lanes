@@ -132,8 +132,7 @@ describe('lane B: what federation pushes down and what it drags over the wire', 
   it('pushes the point lookup down, so only the matching rows cross the wire', () => {
     const result = laneB('order_lookup');
     expect(result.metrics.filtersPushed).toContain('order_id=');
-    // Not a fixed count: how many line items one order has depends on the dataset.
-    // What matters is that Postgres filtered, so nothing extra was transferred.
+    // Not a fixed count: what matters is that nothing extra crossed the wire.
     expect(result.metrics.rowsScanned).toBe(result.metrics.rowsReturned);
   });
 
