@@ -17,13 +17,27 @@ export interface DuckDBOptions {
 
 const EXTENSION_NAME = /^[a-z_]+$/;
 
-export async function connectDuckDB(options: DuckDBOptions = {}): Promise<DuckDBConnection> {
-  const instance = await DuckDBInstance.create(options.path ?? ':memory:');
-  const connection = await instance.connect();
+/**
+ * UTC, set at the instance and again on the connection.
+ *
+ * This is not belt and braces, it is a correctness fix with a measured failure mode.
+ * DuckDB defaults `TimeZone` to the host zone. On a machine in Asia/Kolkata, an order
+ * placed at 19:00 UTC on 28 February is reported by `strftime(order_ts, '%Y-%m')` as
+ * **March**, because +05:30 pushes it over midnight. Q2 would then disagree with
+ * Postgres about which month a row belongs to, on some rows, on some machines - the
+ * worst kind of bug, because it is invisible until someone runs it somewhere else.
+ *
+ * One quirk worth knowing: this fixes computation but not display. DuckDB 1.5.3 still
+ * renders TIMESTAMPTZ with the host offset. That is harmless here because the offset
+ * is always explicit in the rendered string and the normaliser reads it - see
+ * tests/unit/normalize.test.ts - but it means "the timestamp looks wrong" is not by
+ * itself evidence that anything is wrong.
+ */
+const UTC_CONFIG = { TimeZone: 'UTC' } as const;
 
-  // UTC first, before anything else runs. strftime, date_trunc and timestamp
-  // rendering all read the session zone, and six engines can only agree on a
-  // month boundary if they agree on this.
+export async function connectDuckDB(options: DuckDBOptions = {}): Promise<DuckDBConnection> {
+  const instance = await DuckDBInstance.create(options.path ?? ':memory:', { ...UTC_CONFIG });
+  const connection = await instance.connect();
   await connection.run(`SET TimeZone='UTC'`);
 
   for (const extension of options.extensions ?? []) {

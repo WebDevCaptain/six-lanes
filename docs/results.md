@@ -279,6 +279,106 @@ Lanes A and B both query the transactional cluster, which violates the constrain
 that analytics must not raise OLTP latency. They are here as the *before* case that
 motivates C, and the app says so on the page rather than in a footnote.
 
+## Day 3 - the lake grows a catalog
+
+`pnpm gaps` reproduces each of the six gaps in section 6 of the plan against a real
+lake, then does the same six things through DuckLake. What follows is what it printed,
+not what the table promised.
+
+### The gaps, felt
+
+**No ACID.** A partition file is renamed out of the way, as a writer replacing it
+would. The lake goes from 110,392 rows to **75,228 rows** and answers cheerfully. No
+error, no warning - just a smaller number that a dashboard would render as a bad week.
+
+**No atomic multi-partition change.** Repricing three months produced four totals:
+29,499,234 -> 30,459,807 -> 31,399,018 -> 32,449,157. The three in the middle are
+answers to a question nobody asked - some months repriced, some not.
+
+**No schema evolution, and this one was not what I expected.** Adding a `margin`
+column to one partition of three did **not** break the lake. Queries touching only
+the old columns kept working, because column pruning means they never look at the
+part of the schema that disagrees. The lake is inconsistent and everything reports
+healthy. The failure surfaces later, in an unrelated query:
+
+```
+Invalid Input Error: schema mismatch in glob: column "margin" was read from the
+original file ".../month=2025-01/data.parquet", but could not be found in file
+".../month=2025-03/data.parquet"
+```
+
+`union_by_name=true` recovers, and makes it worse: the new column now reads NULL for
+two thirds of the data, indistinguishable from a real NULL.
+
+**No history.** The repricing overwrote three files. The previous rows are not
+archived or superseded, they are gone.
+
+**No catalog.** A directory walk found the three files in 0.12 ms locally. The same
+thing over HTTP:
+
+```
+Invalid Input Error: Globs (`*`) for generic HTTP file is are not supported.
+```
+
+That is the sentence that decides the architecture. A lake on object storage cannot
+be globbed, so the file list has to be produced somewhere with a filesystem and
+carried to the reader - which is a catalog, just a hand-rolled one that is stale the
+moment a writer starts.
+
+### The gaps, closed
+
+| Gap | DuckLake |
+| --- | --- |
+| No ACID | `BEGIN; DELETE ...; ROLLBACK` - 75,228 rows inside the transaction, 110,392 after. Never visible outside. |
+| No atomic multi-partition change | Three partitions repriced in one transaction produced **one** snapshot. No intermediate state exists. |
+| No schema evolution | `ALTER TABLE ADD COLUMN margin` - every reader keeps working, old files untouched, the catalog records which schema version each file belongs to. |
+| No history | `AT (VERSION => 3)` returns the pre-backfill total from the same table in the same query. |
+| No catalog | One indexed query against Postgres returns the live file list with per-column min/max. |
+| Slow planning | The walk grows with the number of files and needs a filesystem. The catalog query grows with the number of files that *match* and needs a socket. |
+
+### What the catalog was actually worth
+
+Lane C moved from globbing raw Parquet to reading `lake.orders`. Same data, same
+partitioning, same compression - the only change is that a Postgres table now knows
+what the files are.
+
+| Query | Gen 1, raw glob | Gen 2, DuckLake |
+| --- | --- | --- |
+| revenue by category | 4.79 ms, 2.67 MB, 24 files | 4.22 ms, 2.33 MB, 24 files |
+| revenue by month | 5.80 ms, 1.11 MB, **7 files** | 5.90 ms, 1017 KB, **6 files** |
+| order lookup | 4.81 ms, 970 KB, **24 files** | 4.81 ms, 590 KB, **1 file** |
+
+The point lookup is the one that matters. `order_id` is **not** the partition key, so
+path-based pruning could do nothing and generation 1 opened all 24 files to read their
+footers. DuckLake keeps min/max per column per file in Postgres, so it eliminated 23
+files **before touching storage at all** - one indexed query instead of two dozen HTTP
+round trips.
+
+That is the difference between metadata you have to go and fetch and metadata you can
+query.
+
+### A default worth knowing about
+
+The first DuckLake build came out at **25.30 MB** against generation 1's 14.95 MB.
+That is exactly the snappy figure from the Day 2 layout study: DuckLake does not
+inherit the compression choice, it has its own default. One
+`ducklake_set_option('parquet_compression', 'zstd')` and it is 14.96 MB - within 0.1%
+of the hand-written lake. A lakehouse layer is a set of defaults as much as it is a
+format.
+
+### Why this is the project's most interesting answer
+
+The catalog is Postgres. The data is Parquet. The compute is DuckDB.
+
+Postgres and DuckDB are not competing in lane C, they are cooperating - each doing
+what it is actually good at. Postgres holds a small, transactional, heavily indexed
+set of metadata and answers point queries against it in microseconds, which is
+precisely its strength and precisely what a catalog needs. DuckDB scans columnar
+files, which is precisely its strength and precisely what a query needs.
+
+The whole first half of this project is a fight between the two. The second half is
+the observation that the fight was the wrong frame.
+
 ---
 
 ## Raw measurement log

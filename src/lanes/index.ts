@@ -1,5 +1,10 @@
-import { LAKE_BASE_URL, LAKE_DIRS, PATHS, POSTGRES_URL } from '../config.js';
-import { discoverParquetFiles, parquetRelation } from '../lake/raw-lake.js';
+import { LAKE_BASE_URL, LAKE_DIRS, POSTGRES_URL } from '../config.js';
+import {
+  DUCKLAKE,
+  DUCKLAKE_EXTENSIONS,
+  DUCKLAKE_RELATION,
+  attachDuckLakeSql,
+} from '../lake/ducklake.js';
 import { toLibpqConnectionString } from '../postgres/connection.js';
 import type { Lane, LaneId } from '../types.js';
 import { createDuckDBLane } from './duckdb.js';
@@ -10,9 +15,6 @@ import { createPostgresLane } from './postgres.js';
  * Construction of the lanes that run on the server. Lanes D and E are browser-only
  * and are built in app/, where a browser exists.
  */
-
-/** The view lane C reads through, so the SQL on screen is not two dozen URLs. */
-const LAKE_VIEW = 'lake_orders';
 
 const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
   postgres: () =>
@@ -37,6 +39,19 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
       uncachedMetrics: false,
     }),
 
+  /**
+   * Lane C reads generation 2, through the DuckLake catalog.
+   *
+   * The catalog lives in Postgres and the data is fetched over HTTP with an
+   * overridden DATA_PATH - the same split a deployment uses, where the catalog is a
+   * managed database and the Parquet sits on a CDN. Nothing was rewritten to make
+   * that work: DuckLake stores its file paths relative to DATA_PATH, so re-pointing
+   * is a connection string change.
+   *
+   * Note what is gone compared with generation 1: no directory walk, no explicit
+   * list of two dozen URLs, no view to hide them behind. `FROM lake.orders` is the
+   * whole thing, and the file list comes from one transactional metadata query.
+   */
   'duckdb-lake': () =>
     createDuckDBLane({
       id: 'duckdb-lake',
@@ -45,9 +60,17 @@ const SERVER_LANES: Partial<Record<LaneId, () => Promise<Lane>>> = {
         'Reads the lake over HTTP, the same path a CDN-hosted deployment uses.',
         'Byte counts come from an uncached pass: no client-side file cache, so every run pays the full transfer.',
       ],
-      extensions: ['httpfs'],
-      relation: parquetRelation(LAKE_BASE_URL, discoverParquetFiles(PATHS.lakeRoot, LAKE_DIRS.raw)),
-      viewName: LAKE_VIEW,
+      extensions: [...DUCKLAKE_EXTENSIONS],
+      setup: [
+        attachDuckLakeSql({
+          alias: DUCKLAKE.alias,
+          dataPath: `${LAKE_BASE_URL}/${LAKE_DIRS.duckLake}`,
+          metadataSchema: DUCKLAKE.metadataSchema,
+          overrideDataPath: true,
+          readOnly: true,
+        }),
+      ],
+      relation: DUCKLAKE_RELATION,
       partitioned: true,
       uncachedMetrics: true,
     }),
