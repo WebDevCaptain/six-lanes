@@ -37,6 +37,10 @@ export function getQuery(id: QueryId): QueryDef {
  * week apart are comparable, and a six-month window mid-dataset so there are files to
  * prune on both sides. `limit` is 5 against eight categories, since a LIMIT that
  * never limits demonstrates nothing.
+ *
+ * `orderId` is tied to the reference dataset: it names a real order at 1,000,000 line
+ * items and not at much smaller sizes. `pnpm load` refuses to run when it names
+ * nothing, because a point lookup that returns no rows is one every lane agrees on.
  */
 export const DEFAULT_PARAMS: QueryParams = {
   from: '2025-03-01T00:00:00Z',

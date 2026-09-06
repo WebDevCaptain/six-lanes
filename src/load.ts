@@ -1,10 +1,12 @@
 import { existsSync, rmSync } from 'node:fs';
 
 import { formatBytes, formatMs } from './bench/table';
-import { LAKE_DIRS, PATHS, PGDUCKDB_URL, POSTGRES_URL } from './config';
+import { DATASET, LAKE_DIRS, PATHS, PGDUCKDB_URL, POSTGRES_URL } from './config';
 import { connectDuckDB } from './duckdb/connect';
 import { discoverParquetFiles, totalBytes } from './lake/raw-lake';
 import { describeLoad, isReachable, loadStar } from './postgres/load-star';
+import { DEFAULT_PARAMS } from './queries/index';
+import { scalar } from './duckdb/connect';
 
 /**
  * `pnpm load` - projects data/olap.duckdb into the Postgres star (lane A, and the
@@ -21,6 +23,22 @@ if (!existsSync(PATHS.database)) {
 }
 
 const duck = await connectDuckDB({ path: PATHS.database, extensions: ['postgres'] });
+
+/*
+ * Q7 asks for one specific order id. Below roughly 430,000 line items that order does
+ * not exist, every lane returns nothing, and they all agree on it - a pass that looks
+ * exactly like success. Checked before anything is loaded rather than discovered in a
+ * table of empty results.
+ */
+const q7Rows = Number(
+  await scalar(duck, `SELECT count(*) FROM fact_order_item WHERE order_id = ${DEFAULT_PARAMS.orderId}`),
+);
+if (q7Rows === 0) {
+  throw new Error(
+    `order ${DEFAULT_PARAMS.orderId} does not exist at ${DATASET.orderItems.toLocaleString('en-US')} rows, ` +
+      `so the point lookup would be vacuous. Raise OLAP_ROWS and regenerate.`,
+  );
+}
 
 console.log('writing the raw Parquet lake (generation 1)...');
 const lakeMs = await time(async () => {

@@ -10,8 +10,10 @@ import {
   attachDuckLakeSql,
   metadataTable,
 } from '../../src/lake/ducklake';
+import { CATEGORIES } from '../../src/data/catalog';
 import { TABLES } from '../../src/queries/dialect';
 import { discoverParquetFiles } from '../../src/lake/raw-lake';
+import { DEFAULT_PARAMS } from '../../src/queries/index';
 
 const FACT = `${DUCKLAKE.alias}.${TABLES.fact}`;
 const PRODUCT = `${DUCKLAKE.alias}.${TABLES.product}`;
@@ -93,7 +95,7 @@ describe('reading the lake from somewhere it was never written', () => {
     const fromHttp = (await remote.runAndReadAll(query)).getRowObjectsJson();
 
     expect(fromHttp).toEqual(fromDisk);
-    expect(fromHttp.length).toBe(8);
+    expect(fromHttp.length).toBe(CATEGORIES.length);
   });
 
   it('prunes to one file for one month, using catalog statistics', async () => {
@@ -107,7 +109,7 @@ describe('reading the lake from somewhere it was never written', () => {
   it('prunes on a clustered column the lake is not partitioned by', async () => {
     // Not the partition key, yet catalog min/max still drops 23 of 24 files.
     const summary = await profiler.measure(
-      `SELECT count(*) FROM ${FACT} WHERE order_id = 250000`,
+      `SELECT count(*) FROM ${FACT} WHERE order_id = ${DEFAULT_PARAMS.orderId}`,
       [],
     );
     expect(summary.filesRead).toBe(1);

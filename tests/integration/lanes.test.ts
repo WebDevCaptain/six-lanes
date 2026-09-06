@@ -129,9 +129,12 @@ describe('lane B: what federation pushes down and what it drags over the wire', 
     expect(metrics.filtersPushed).toContain('order_ts<');
   });
 
-  it('pushes the point lookup down, so the b-tree still gets used', () => {
-    expect(laneB('order_lookup').metrics.filtersPushed).toContain('order_id=');
-    expect(laneB('order_lookup').metrics.rowsScanned).toBe(3);
+  it('pushes the point lookup down, so only the matching rows cross the wire', () => {
+    const result = laneB('order_lookup');
+    expect(result.metrics.filtersPushed).toContain('order_id=');
+    // Not a fixed count: how many line items one order has depends on the dataset.
+    // What matters is that Postgres filtered, so nothing extra was transferred.
+    expect(result.metrics.rowsScanned).toBe(result.metrics.rowsReturned);
   });
 
   it('does NOT push the aggregate down: a million rows cross the wire for eight', () => {

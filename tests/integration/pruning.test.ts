@@ -5,6 +5,7 @@ import { LAKE_BASE_URL, LAKE_DIRS, PATHS } from '../../src/config';
 import { connectDuckDB } from '../../src/duckdb/connect';
 import { createProfiler, type DuckDBProfiler } from '../../src/duckdb/profile';
 import { discoverParquetFiles, parquetRelation, totalBytes } from '../../src/lake/raw-lake';
+import { DEFAULT_PARAMS } from '../../src/queries/index';
 
 /**
  * The physics claims, measured against the real lake.
@@ -106,7 +107,7 @@ describe('row group statistics', () => {
      * group's min/max excludes almost every id. That is why lane C loses Q7 by a
      * factor of ten rather than a thousand.
      */
-    const summary = await profiler.measure('SELECT * FROM lake_orders WHERE order_id = 250000', []);
+    const summary = await profiler.measure(`SELECT * FROM lake_orders WHERE order_id = ${DEFAULT_PARAMS.orderId}`, []);
     expect(summary.rowsScanned).toBeLessThan(1000);
     expect(summary.bytesRead).toBeLessThan(lakeBytes * 0.15);
   });

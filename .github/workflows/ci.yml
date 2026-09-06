@@ -5,13 +5,14 @@ on:
     branches: [main]
   pull_request:
 
-# The whole pipeline, on a smaller dataset. The point is not to publish timings from a
-# shared CI runner - those would be noise - but to prove that every claim the
-# repository makes still holds: the lanes agree, the SCD2 invariants hold, pruning
-# still prunes, and the slice still fits its budget.
-env:
-  OLAP_ROWS: '200000'
-  OLAP_SLICE_ROWS: '60000'
+# The whole pipeline on the reference dataset. Not to publish timings from a shared
+# runner, which would be noise, but to prove the claims still hold: the lanes agree,
+# the SCD2 invariants hold, pruning prunes, and the slice fits its budget.
+#
+# The reference size rather than a token one, because DEFAULT_PARAMS names a specific
+# order id that only exists at that size. Shrink the dataset and Q7 asks for an order
+# nobody has, which every lane answers with nothing and agrees about. `pnpm load`
+# refuses to proceed in that state, so CI would fail rather than pass emptily.
 
 jobs:
   test:
