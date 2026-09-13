@@ -10,11 +10,9 @@ tsconfig.tsbuildinfo
 tmp/
 
 # generated: rebuild with `pnpm generate && pnpm load`
-data/
-lake/raw/
-lake/ducklake/
-lake/study/
-public/slice/
-.next/
+/data/
+/lake/raw/
+/lake/ducklake/
+/lake/study/
+/public/slice/
 next-env.d.ts
-.DS_Store
